@@ -1,0 +1,21 @@
+fileFormatVersion: 2
+guid: 2aa5f3c01f98ff643a79e71c928227ad
+timeCreated: 1542318217
+licenseType: Free
+TrueTypeFontImporter:
+  serializedVersion: 4
+  fontSize: 16
+  forceTextureCase: -2
+  characterSpacing: 0
+  characterPadding: 1
+  includeFontData: 1
+  fontName: Edis
+  fontNames:
+  - Edis
+  fallbackFontReferences: []
+  customCharacters: 
+  fontRenderingMode: 0
+  ascentCalculationMode: 1
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
