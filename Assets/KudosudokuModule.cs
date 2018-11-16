@@ -83,9 +83,19 @@ public class KudosudokuModule : MonoBehaviour
     // Which squares are currently waiting to have their answers submitted.
     private readonly Coroutine[] _activeSquares = new Coroutine[16];
 
-    // Which squares currently have a panel open OR active Morse or Tap Code.
-    // While this is non-null, all other unsolved squares give a strike.
+    /// <summary>
+    ///     Which squares currently have a panel open OR active Morse or Tap Code.</summary>
+    /// <remarks>
+    ///     While this is non-null, all other unsolved squares give a strike.</remarks>
     private int? _specialActiveSquare = null;
+
+    /// <summary>Lists all the times at which the mouse was pressed or released while entering Morse code.</summary>
+    private List<float> _morsePressTimes;
+    /// <summary>Lists the number of taps between pauses.</summary>
+    private List<int> _tapCodeInput;
+    /// <summary>While true, the next tap will still be added to the last item in <see cref="_tapCodeInput"/>.</summary>
+    private bool _tapCodeLastCodeStillActive;
+    private Coroutine _listeningPlaying;
 
     private readonly char[] _numberNames = new char[4];
     private readonly bool[] _shown = new bool[16];
@@ -145,20 +155,26 @@ public class KudosudokuModule : MonoBehaviour
             _numberNames[i] = (char) ((_numberNames[i - 1] - 'A' + dist) % 26 + 'A');
         Debug.LogFormat(@"[Kudosudoku #{0}] Number names: {1}", _moduleId, _numberNames.Select((ch, ix) => string.Format("{0}={1}", ix + 1, ch)).JoinString(", "));
 
-        _codings = Enum.GetValues(typeof(Coding)).Cast<Coding>().ToArray();
+        _codings = Enum.GetValues(typeof(Coding)).Cast<Coding>().ToArray().Shuffle();
 
-        tryAgain:
-        _codings.Shuffle();
-        var givens = Ut.ReduceRequiredSet(Enumerable.Range(0, 16).ToList().Shuffle(), state =>
+        var potentialGivens = Enumerable.Range(0, 16).ToList().Shuffle();
+        // Special case: if both C and K are letter names, Tap Code can’t be a given
+        if (_numberNames.Contains('C') && _numberNames.Contains('K'))
+            potentialGivens.Remove(Array.IndexOf(_codings, Coding.TapCode));
+
+        // DEBUGGING
+        // potentialGivens.Remove(Array.IndexOf(_codings, Coding.Semaphores));
+
+        var givens = Ut.ReduceRequiredSet(potentialGivens, state =>
                 // Special case: if both E and T are letter names, Morse Code must be a given
                 !(_numberNames.Contains('E') && _numberNames.Contains('T') && !state.SetToTest.Contains(Array.IndexOf(_codings, Coding.MorseCode))) &&
+
+                // FOR DEBUGGING: force a specific coding to be pre-filled
+                // state.SetToTest.Contains(Array.IndexOf(_codings, Coding.ListeningSounds)) &&
+
                 // Make sure that the solution is still unique
                 _allSudokus.Count(sudoku => state.SetToTest.All(ix => sudoku[ix] == _solution[ix])) == 1)
             .ToArray();
-
-        // Special case: if both C and K are letter names, Tap Code can’t be a given
-        if (_numberNames.Contains('C') && _numberNames.Contains('K') && givens.Contains(Array.IndexOf(_codings, Coding.TapCode)))
-            goto tryAgain;
 
         Debug.LogFormat(@"[Kudosudoku #{0}] Codings:", _moduleId);
         for (int row = 0; row < 4; row++)
@@ -197,7 +213,7 @@ public class KudosudokuModule : MonoBehaviour
                         break;
 
                     case Coding.ListeningSounds:
-                        Audio.PlaySoundAtTransform(_listeningAlternatives[_solution[i]], transform);
+                        playListeningSound(_listeningAlternatives[_solution[i]]);
                         break;
                 }
                 return false;
@@ -264,10 +280,22 @@ public class KudosudokuModule : MonoBehaviour
         };
     }
 
-    /// <summary>Lists all the times at which the mouse was pressed or released while entering Morse code.</summary>
-    private List<float> _morsePressTimes;
-    private List<int> _tapCodeInput;
-    private bool _tapCodeLastCodeStillActive;
+    private void playListeningSound(string soundName)
+    {
+        if (_listeningPlaying != null)
+            StopCoroutine(_listeningPlaying);
+        _listeningPlaying = StartCoroutine(playListeningSoundCoroutine(soundName));
+    }
+
+    private IEnumerator playListeningSoundCoroutine(string soundName)
+    {
+        Audio.PlaySoundAtTransform("TapePlay", transform);
+        yield return new WaitForSeconds(.5f);
+        Audio.PlaySoundAtTransform(soundName, transform);
+        yield return new WaitForSeconds(4.5f);
+        Audio.PlaySoundAtTransform("TapeStop", transform);
+        _listeningPlaying = null;
+    }
 
     private KMSelectable.OnInteractHandler morseMouseDown(int i)
     {
@@ -514,10 +542,9 @@ public class KudosudokuModule : MonoBehaviour
             }
 
             case Coding.TapCode:
-                break;
             case Coding.SimonSamples:
-                break;
             case Coding.ListeningSounds:
+                // Do nothing, as these are audio-only
                 break;
 
             case Coding.MaritimeFlags:
