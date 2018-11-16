@@ -32,12 +32,27 @@ public class KudosudokuModule : MonoBehaviour
     public GameObject MorseParent;
     public GameObject ArrowsParent;
 
+    public GameObject TopPanelBacking;
+    public GameObject TopPanelCover;
+    public GameObject SemaphoresPanel;
+    public GameObject BinaryPanel;
+    public GameObject RightPanelBacking;
+    public GameObject RightPanelCover;
+    public GameObject BraillePanel;
+
     public KMSelectable[] Squares;
 
     public GameObject ImageTemplate;
     public MeshRenderer MorseLed;
     public Material MorseLedOn;
     public Material MorseLedOff;
+    public Material SquareSolved;
+    public Material SquareUnsolved;
+    public Material SquareExpectingMorse;
+    public Material SquareExpectingMorseDown;
+    public Material SquareExpectingTapCode;
+
+    private MeshRenderer[] _squaresMR;
 
     public enum Coding
     {
@@ -65,10 +80,17 @@ public class KudosudokuModule : MonoBehaviour
     private bool _isSolved;
     private Coding[] _codings;
 
+    // Which squares are currently waiting to have their answers submitted.
+    private readonly Coroutine[] _activeSquares = new Coroutine[16];
+
+    // Which squares currently have a panel open OR active Morse or Tap Code.
+    // While this is non-null, all other unsolved squares give a strike.
+    private int? _specialActiveSquare = null;
+
     private readonly char[] _numberNames = new char[4];
     private readonly bool[] _shown = new bool[16];
     private readonly bool[] _theCubeAlternatives = new bool[4];
-    private readonly int[] _listeningAlternatives = new int[4];
+    private readonly string[] _listeningAlternatives = new string[4];
 
     [MenuItem("A/B")]
     public static void Clean()
@@ -85,6 +107,7 @@ public class KudosudokuModule : MonoBehaviour
     {
         _moduleId = _moduleIdCounter++;
         _isSolved = false;
+        _squaresMR = new MeshRenderer[16];
 
         LetterTextMesh.gameObject.SetActive(false);
         DigitTextMesh.gameObject.SetActive(false);
@@ -96,44 +119,311 @@ public class KudosudokuModule : MonoBehaviour
         ArrowsParent.SetActive(false);
         ImageTemplate.gameObject.SetActive(false);
 
+        for (int i = 0; i < 16; i++)
+        {
+            _squaresMR[i] = Squares[i].GetComponent<MeshRenderer>();
+            _squaresMR[i].material = SquareUnsolved;
+            Squares[i].OnInteract = squarePress(i);
+        }
+
         for (int i = 0; i < 4; i++)
         {
             _theCubeAlternatives[i] = Rnd.Range(0, 2) != 0;
-            _listeningAlternatives[i] = 4 * Rnd.Range(0, 10) + i;
+            _listeningAlternatives[i] = _listeningSounds[4 * Rnd.Range(0, 10) + i];
         }
 
         _solution = _allSudokus[Rnd.Range(0, _allSudokus.Length)];
         Debug.LogFormat(@"[Kudosudoku #{0}] Solution:", _moduleId);
-        for (int i = 0; i < 4; i++)
-            Debug.Log(_solution.Skip(4 * i).Take(4).JoinString(" "));
+        for (int row = 0; row < 4; row++)
+            Debug.Log(_solution.Skip(4 * row).Take(4).Select(n => n + 1).JoinString(" "));
 
         var dist = Bomb.GetSerialNumberNumbers().First();
+        if (dist == 0)
+            dist = 10;
         _numberNames[0] = Bomb.GetSerialNumberLetters().First();
         for (int i = 1; i < 4; i++)
             _numberNames[i] = (char) ((_numberNames[i - 1] - 'A' + dist) % 26 + 'A');
         Debug.LogFormat(@"[Kudosudoku #{0}] Number names: {1}", _moduleId, _numberNames.Select((ch, ix) => string.Format("{0}={1}", ix + 1, ch)).JoinString(", "));
 
-        var coords = Enumerable.Range(0, 16).ToList().Shuffle();
-        var givens = Ut.ReduceRequiredSet(coords, state => _allSudokus.Count(sudoku => state.SetToTest.All(ix => sudoku[ix] == _solution[ix])) == 1).ToArray();
+        _codings = Enum.GetValues(typeof(Coding)).Cast<Coding>().ToArray();
 
-        _codings = Enum.GetValues(typeof(Coding)).Cast<Coding>().ToArray().Shuffle();
+        tryAgain:
+        _codings.Shuffle();
+        var givens = Ut.ReduceRequiredSet(Enumerable.Range(0, 16).ToList().Shuffle(), state =>
+                // Special case: if both E and T are letter names, Morse Code must be a given
+                !(_numberNames.Contains('E') && _numberNames.Contains('T') && !state.SetToTest.Contains(Array.IndexOf(_codings, Coding.MorseCode))) &&
+                // Make sure that the solution is still unique
+                _allSudokus.Count(sudoku => state.SetToTest.All(ix => sudoku[ix] == _solution[ix])) == 1)
+            .ToArray();
 
         // Special case: if both C and K are letter names, Tap Code can’t be a given
-        if (_numberNames.Contains('C') && _numberNames.Contains('K'))
-            while (givens.Contains(Array.IndexOf(_codings, Coding.TapCode)))
-                _codings.Shuffle();
+        if (_numberNames.Contains('C') && _numberNames.Contains('K') && givens.Contains(Array.IndexOf(_codings, Coding.TapCode)))
+            goto tryAgain;
+
+        Debug.LogFormat(@"[Kudosudoku #{0}] Codings:", _moduleId);
+        for (int row = 0; row < 4; row++)
+            Debug.Log(Enumerable.Range(0, 4).Select(col => _codings[4 * row + col].ToString()).JoinString(" "));
 
         foreach (var ix in givens)
             showSquare(ix, initial: true);
+    }
 
-        // FOR DEBUGGING
-        for (int i = 0; i < 16; i++)
-            showSquare(i, initial: true);
+    private KMSelectable.OnInteractHandler squarePress(int i)
+    {
+        return delegate
+        {
+            if (_isSolved)
+                return false;
+
+            if (_specialActiveSquare != null && _specialActiveSquare.Value != i)
+            {
+                Module.HandleStrike();
+                Debug.LogFormat(@"[Kudosudoku #{0}] You received a strike because you pressed on square {1}{2} while square {3}{4} was still waiting for {5} input.",
+                    _moduleId, (char) ('A' + i % 4), (char) ('1' + i / 4), (char) ('A' + _specialActiveSquare.Value % 4), (char) ('1' + _specialActiveSquare.Value / 4), _codings[_specialActiveSquare.Value]);
+                return false;
+            }
+
+            if (_shown[i])
+            {
+                // Re-play a sound if there is one
+                switch (_codings[i])
+                {
+                    case Coding.TapCode:
+                        StartCoroutine(soundTapCode(_tapCodes[_numberNames[_solution[i]] - 'A']));
+                        break;
+
+                    case Coding.SimonSamples:
+                        Audio.PlaySoundAtTransform(_simonSamplesSounds[_solution[i]], transform);
+                        break;
+
+                    case Coding.ListeningSounds:
+                        Audio.PlaySoundAtTransform(_listeningAlternatives[_solution[i]], transform);
+                        break;
+                }
+                return false;
+            }
+
+            // User clicked on an unsolved square
+            switch (_codings[i])
+            {
+                case Coding.MorseCode:
+                    // Upon the first click, the square turns “dark red”
+                    _squaresMR[i].material = SquareExpectingMorse;
+                    _morsePressTimes = new List<float>();
+                    _specialActiveSquare = i;
+
+                    // Henceforth, the square expects Morse code input
+                    Squares[i].OnInteract = morseMouseDown(i);
+                    Squares[i].OnInteractEnded = morseMouseUp(i);
+                    StartCoroutine(interpretMorseCode(i));
+                    break;
+
+                case Coding.TapCode:
+                    // Upon the first click, the square turns “blue”
+                    _squaresMR[i].material = SquareExpectingTapCode;
+                    _tapCodeInput = new List<int>();
+                    _specialActiveSquare = i;
+
+                    // Henceforth, the square expects Tap Code input
+                    Squares[i].OnInteract = tapCodeMouseDown(i);
+                    break;
+
+                case Coding.Semaphores:
+                    break;
+
+                case Coding.Letters:
+                    break;
+                case Coding.Digits:
+                    break;
+                case Coding.Braille:
+                    break;
+                case Coding.MaritimeFlags:
+                    break;
+                case Coding.Binary:
+                    break;
+                case Coding.SimonSamples:
+                    break;
+                case Coding.Astrology:
+                    break;
+                case Coding.Snooker:
+                    break;
+                case Coding.Arrows:
+                    break;
+                case Coding.CardSuits:
+                    break;
+                case Coding.Mahjong:
+                    break;
+                case Coding.TheCubeSymbols:
+                    break;
+                case Coding.ListeningSounds:
+                    break;
+                default:
+                    break;
+            }
+            return false;
+        };
+    }
+
+    /// <summary>Lists all the times at which the mouse was pressed or released while entering Morse code.</summary>
+    private List<float> _morsePressTimes;
+    private List<int> _tapCodeInput;
+    private bool _tapCodeLastCodeStillActive;
+
+    private KMSelectable.OnInteractHandler morseMouseDown(int i)
+    {
+        return delegate
+        {
+            // Check if mouse is already down. This should never happen.
+            if (_morsePressTimes.Count % 2 == 1)
+                return false;
+            _morsePressTimes.Add(Time.time);
+            _squaresMR[i].material = SquareExpectingMorseDown;
+            return false;
+        };
+    }
+
+    private Action morseMouseUp(int i)
+    {
+        return delegate
+        {
+            // Check if mouse is already up. This should ideally never happen, but could be because the OnInteractEnded handler is swapped out when the user presses the square the first time: 
+            if (_morsePressTimes.Count % 2 == 0)
+                return;
+            _morsePressTimes.Add(Time.time);
+            _squaresMR[i].material = SquareExpectingMorse;
+        };
+    }
+
+    private IEnumerator interpretMorseCode(int i)
+    {
+        while (_morsePressTimes.Count == 0 || _morsePressTimes.Count % 2 == 1 || Time.time - _morsePressTimes.Last() < 2)
+            yield return null;
+
+        // User finished entering Morse Code.
+        _specialActiveSquare = null;
+        Squares[i].OnInteract = squarePress(i);
+        Squares[i].OnInteractEnded = null;
+
+        // If there’s only one tap, no matter how long, accept it as input for either E or T.
+        string reasonForWrongAnswer;
+        if (_morsePressTimes.Count == 2)
+        {
+            if ("ET".Contains(_numberNames[_solution[i]]))
+                goto correctAnswer;
+            reasonForWrongAnswer = "Morse code for E or T";
+            goto wrongAnswer;
+        }
+
+        // Calculate the average gap length
+        var totalGapTime = 0f;
+        for (int t = 1; t < _morsePressTimes.Count - 1; t += 2)
+            totalGapTime += _morsePressTimes[t + 1] - _morsePressTimes[t];
+        var averageGapTime = totalGapTime / (_morsePressTimes.Count / 2 - 1);
+        var morseCode = "";
+        for (int t = 0; t < _morsePressTimes.Count; t += 2)
+            morseCode += (_morsePressTimes[t + 1] - _morsePressTimes[t]) < 2 * averageGapTime ? "." : "-";
+        var character = _morseCode.FirstOrDefault(kvp => kvp.Value == morseCode);
+        if (character.Key == _numberNames[_solution[i]])
+            goto correctAnswer;
+        reasonForWrongAnswer = character.Key == '\0' ? "an invalid Morse code" : "Morse code for " + character.Key;
+
+        wrongAnswer:
+        Debug.LogFormat(@"[Kudosudoku #{0}] You received a strike because on square {1}{2} you entered {3} while it expected {4}.",
+            _moduleId, (char) ('A' + i % 4), (char) ('1' + i / 4), reasonForWrongAnswer, _numberNames[_solution[i]]);
+        _squaresMR[i].material = SquareUnsolved;
+        strikeAndReshuffle();
+        _morsePressTimes = null;
+        yield break;
+
+        correctAnswer:
+        Debug.LogFormat(@"[Kudosudoku #{0}] Square {1}{2}: correct Morse code input ({3}).", _moduleId, (char) ('A' + i % 4), (char) ('1' + i / 4), _numberNames[_solution[i]]);
+        showSquare(i, initial: false);
+        _morsePressTimes = null;
+    }
+
+    private KMSelectable.OnInteractHandler tapCodeMouseDown(int i)
+    {
+        return delegate
+        {
+            if (_tapCodeLastCodeStillActive)
+                _tapCodeInput[_tapCodeInput.Count - 1]++;
+            else
+            {
+                _tapCodeLastCodeStillActive = true;
+                _tapCodeInput.Add(1);
+            }
+            if (_activeSquares[i] != null)
+                StopCoroutine(_activeSquares[i]);
+            _activeSquares[i] = StartCoroutine(acknowledgeTapCode(i));
+            return false;
+        };
+    }
+
+    private IEnumerator acknowledgeTapCode(int i)
+    {
+        yield return new WaitForSeconds(1f);
+        Audio.PlaySoundAtTransform("MiniTap", transform);
+        _tapCodeLastCodeStillActive = false;
+
+        if (_tapCodeInput.Count < 2)
+            yield break;
+
+        // User finished entering Tap Code.
+        _specialActiveSquare = null;
+        Squares[i].OnInteract = squarePress(i);
+
+        var expected = _tapCodes[_numberNames[_solution[i]] - 'A'];
+        if (expected.SequenceEqual(_tapCodeInput))
+        {
+            Debug.LogFormat(@"[Kudosudoku #{0}] Square {1}{2}: correct Tap Code input ({3}).", _moduleId, (char) ('A' + i % 4), (char) ('1' + i / 4), _tapCodeInput.JoinString(", "));
+            showSquare(i, initial: false);
+        }
+        else
+        {
+            Debug.LogFormat(@"[Kudosudoku #{0}] You received a strike because on square {1}{2} you entered Tap Code “{3}” while it expected “{4}”.",
+                _moduleId, (char) ('A' + i % 4), (char) ('1' + i / 4), _tapCodeInput.JoinString(", "), expected.JoinString(", "));
+            _squaresMR[i].material = SquareUnsolved;
+            strikeAndReshuffle();
+        }
+
+        _tapCodeInput = null;
+    }
+
+    private void strikeAndReshuffle()
+    {
+        Module.HandleStrike();
+
+        var oldCodings = _codings.ToArray();
+        var oldIndexes = Enumerable.Range(0, 16).Where(ix => !_shown[ix]).ToArray();
+        var newIndexes = oldIndexes.ToArray().Shuffle();
+        for (int i = 0; i < oldIndexes.Length; i++)
+            _codings[newIndexes[i]] = oldCodings[oldIndexes[i]];
+
+        Debug.LogFormat(@"[Kudosudoku #{0}] New codings:", _moduleId);
+        for (int row = 0; row < 4; row++)
+            Debug.Log(Enumerable.Range(0, 4).Select(col => _codings[4 * row + col].ToString()).JoinString(" "));
+    }
+
+    private IEnumerator soundTapCode(int[] taps)
+    {
+        yield return new WaitForSeconds(.1f);
+        for (int i = 0; i < taps.Length; i++)
+        {
+            for (int a = 0; a < taps[i]; a++)
+            {
+                Audio.PlaySoundAtTransform("Tap", transform);
+                yield return new WaitForSeconds(.5f);
+            }
+            yield return new WaitForSeconds(.5f);
+        }
     }
 
     private static readonly int[] _semaphoreLeftFlagOrientations = new[] { 135, 90, 45, 0, 180, 180, 180, 90, 135, 0, 135, 135, 135, 135, 90, 90, 90, 90, 90, 45, 45, 0, -45, -45, 45, -135 };
     private static readonly int[] _semaphoreRightFlagOrientations = new[] { -180, -180, -180, -180, -45, -90, -135, 135, 45, -90, 0, -45, -90, -135, 45, 0, -45, -90, -135, 0, -45, -135, -90, -135, -90, -90 };
     private static readonly string[] _brailleCodes = "1,12,14,145,15,124,1245,125,24,245,13,123,134,1345,135,1234,12345,1235,234,2345,136,1236,2456,1346,13456,1356".Split(',');
+    private static readonly int[][] _tapCodes = "11,12,13,14,15,21,22,23,24,25,13,31,32,33,34,35,41,42,43,44,45,51,52,53,54,55".Split(',').Select(str => str.Select(ch => ch - '0').ToArray()).ToArray();
+    private static readonly string[] _simonSamplesSounds = new[] { "HiHat", "OpenHiHat", "Kick", "Snare" };
+    private static readonly string[] _listeningSounds = new[] { "TaxiDispatch", "DialupInternet", "Cow", "PoliceRadioScanner", "ExtractorFan", "CensorshipBleep", "TrainStation", "MedievalWeapons", "Arcade", "DoorClosing", "Casino", "Chainsaw", "Supermarket", "CompressedAir", "SoccerMatch", "ServoMotor", "TawnyOwl", "Waterfall", "SewingMachine", "TearingFabric", "ThrushNightingale", "Zipper", "CarEngine", "VacuumCleaner", "ReloadingGlock19", "BallpointPenWriting", "Oboe", "RattlingIronChain", "Saxophone", "BookPageTurning", "Tuba", "TableTennis", "Marimba", "SqueekyToy", "PhoneRinging", "Helicopter", "TibetanNuns", "FireworkExploding", "ThroatSinging", "GlassShattering" };
 
     private void showSquare(int i, bool initial)
     {
@@ -147,6 +437,7 @@ public class KudosudokuModule : MonoBehaviour
         }
 
         var square = Squares[i].transform;
+        _squaresMR[i].material = SquareSolved;
         switch (_codings[i])
         {
             case Coding.Letters:
@@ -213,7 +504,11 @@ public class KudosudokuModule : MonoBehaviour
             case Coding.MorseCode:
             {
                 reparentAndActivate(MorseParent.transform, square);
-                var characterToBlink = initial && Rnd.Range(0, 3) == 0 ? (char) (_solution[i] + '1') : _numberNames[_solution[i]];
+
+                // Usually we’ll blink the letter, but:
+                //  • If Morse Code is an initial given, it has a 1-in-3 chance of blinking the digit 1–4 instead.
+                //  • If Morse Code is an initial given, would have to blink E or T, and both E and T are number names, definitely blink the digit instead
+                var characterToBlink = initial && (Rnd.Range(0, 3) == 0 || (_numberNames.Contains('E') && _numberNames.Contains('T') && "ET".Contains(_numberNames[_solution[i]]))) ? (char) (_solution[i] + '1') : _numberNames[_solution[i]];
                 StartCoroutine(blinkMorse(characterToBlink));
                 break;
             }

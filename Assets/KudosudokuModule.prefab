@@ -326,6 +326,13 @@ MonoBehaviour:
   BinaryParent: {fileID: 1251786628324882}
   MorseParent: {fileID: 1360119772182548}
   ArrowsParent: {fileID: 1325239567724462}
+  TopPanelBacking: {fileID: 1204454793826588}
+  TopPanelCover: {fileID: 1227257503370466}
+  SemaphoresPanel: {fileID: 1205017030876050}
+  BinaryPanel: {fileID: 1426263220647168}
+  RightPanelBacking: {fileID: 1441143367770188}
+  RightPanelCover: {fileID: 1106595849351080}
+  BraillePanel: {fileID: 1425548115756218}
   Squares:
   - {fileID: 114712161020642910}
   - {fileID: 114115408362767608}
@@ -347,6 +354,14 @@ MonoBehaviour:
   MorseLed: {fileID: 23402826319507182}
   MorseLedOn: {fileID: 2100000, guid: e7faaed3879f99a4c9158cab2de4adfb, type: 2}
   MorseLedOff: {fileID: 2100000, guid: 1015fc75eac34464584a508aea957ef2, type: 2}
+  SquareSolved: {fileID: 2100000, guid: 149147c431a09654fad3d24bfb01ed66, type: 2}
+  SquareUnsolved: {fileID: 2100000, guid: 6b1af451d756ae142b299799024d1515, type: 2}
+  SquareExpectingMorse: {fileID: 2100000, guid: b27f17e82ca462f4aaafb58b080140d3,
+    type: 2}
+  SquareExpectingMorseDown: {fileID: 2100000, guid: 590b60050f1c69840b54bca0fd0bd325,
+    type: 2}
+  SquareExpectingTapCode: {fileID: 2100000, guid: c27a8440bde2dc24b96de1502833333b,
+    type: 2}
 --- !u!114 &11489324
 MonoBehaviour:
   m_ObjectHideFlags: 1
@@ -649,7 +664,7 @@ GameObject:
   m_Component:
   - component: {fileID: 4156671887014772}
   m_Layer: 0
-  m_Name: Semaphores
+  m_Name: SemaphoresPanel
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1096,7 +1111,7 @@ GameObject:
   m_Component:
   - component: {fileID: 4743083096816596}
   m_Layer: 0
-  m_Name: Braille
+  m_Name: BraillePanel
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1111,7 +1126,7 @@ GameObject:
   m_Component:
   - component: {fileID: 4770712757197304}
   m_Layer: 0
-  m_Name: Binary
+  m_Name: BinaryPanel
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3968,7 +3983,7 @@ MeshRenderer:
   m_LightProbeUsage: 1
   m_ReflectionProbeUsage: 1
   m_Materials:
-  - {fileID: 2100000, guid: 149147c431a09654fad3d24bfb01ed66, type: 2}
+  - {fileID: 2100000, guid: 590b60050f1c69840b54bca0fd0bd325, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -4000,7 +4015,7 @@ MeshRenderer:
   m_LightProbeUsage: 1
   m_ReflectionProbeUsage: 1
   m_Materials:
-  - {fileID: 2100000, guid: 149147c431a09654fad3d24bfb01ed66, type: 2}
+  - {fileID: 2100000, guid: c27a8440bde2dc24b96de1502833333b, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -4416,7 +4431,7 @@ MeshRenderer:
   m_LightProbeUsage: 1
   m_ReflectionProbeUsage: 1
   m_Materials:
-  - {fileID: 2100000, guid: 149147c431a09654fad3d24bfb01ed66, type: 2}
+  - {fileID: 2100000, guid: b27f17e82ca462f4aaafb58b080140d3, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
