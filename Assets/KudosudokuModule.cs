@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using KModkit;
 using Kudosudoku;
-using UnityEditor;
 using UnityEngine;
 using Rnd = UnityEngine.Random;
 
@@ -126,13 +125,6 @@ public class KudosudokuModule : MonoBehaviour
     private readonly char[] _theCubeAlternatives = new char[4];
     private readonly string[] _listeningAlternatives = new string[4];
 
-    [MenuItem("A/B")]
-    public static void Clean()
-    {
-        var m = FindObjectOfType<KudosudokuModule>();
-        Debug.Log(m.name);
-    }
-
     // ** STATIC DATA **//
 
     /// <summary>Lists all 288 possible 4×4 Sudokus.</summary>
@@ -226,7 +218,7 @@ public class KudosudokuModule : MonoBehaviour
             potentialGivens.Remove(Array.IndexOf(_codings, Coding.TapCode));
 
         // FOR DEBUGGING: prevent a specific coding from being pre-filled
-        potentialGivens.Remove(Array.IndexOf(_codings, Coding.Mahjong));
+        //potentialGivens.Remove(Array.IndexOf(_codings, Coding.Mahjong));
 
         var givens = Ut.ReduceRequiredSet(potentialGivens, state =>
                 // Special case: if both E and T are letter names, Morse Code must be a given
@@ -297,12 +289,12 @@ public class KudosudokuModule : MonoBehaviour
                 var flag1 = SemaphoresParent.transform.Find("Flag1");
                 var left = _semaphoreLeftFlagOrientations[_numberNames[_solution[sq]] - 'A'];
                 flag1.localEulerAngles = new Vector3(90, 0, left);
-                flag1.localScale = new Vector3(left < 0 ? -1 : 1, 1, 1);
+                flag1.localScale = new Vector3(isLeftSemaphoreFlipped(left) ? -1 : 1, 1, 1);
 
                 var flag2 = SemaphoresParent.transform.Find("Flag2");
                 var right = _semaphoreRightFlagOrientations[_numberNames[_solution[sq]] - 'A'];
                 flag2.localEulerAngles = new Vector3(90, 0, right);
-                flag2.localScale = new Vector3(right > 0 ? 1 : -1, 1, 1);
+                flag2.localScale = new Vector3(isRightSemaphoreFlipped(right) ? 1 : -1, 1, 1);
                 break;
             }
 
@@ -894,6 +886,9 @@ public class KudosudokuModule : MonoBehaviour
         _semaphoreAnimation = StartCoroutine(semaphoreAnimation(oldLeft, oldRight));
     }
 
+    private bool isLeftSemaphoreFlipped(int angle) { return angle < 0 || angle > 180; }
+    private bool isRightSemaphoreFlipped(int angle) { return angle > 0 || angle < -180; }
+
     private IEnumerator semaphoreAnimation(int oldLeft, int oldRight)
     {
         yield return null;
@@ -903,13 +898,13 @@ public class KudosudokuModule : MonoBehaviour
 
         float leftStart = oldLeft;
         float rightStart = oldRight;
-        float leftFStart = oldLeft < 0 ? 180 : 0;
-        float rightFStart = oldRight > 0 ? 180 : 0;
+        float leftFStart = isLeftSemaphoreFlipped(oldLeft) ? 180 : 0;
+        float rightFStart = isRightSemaphoreFlipped(oldRight) ? 180 : 0;
 
         float leftEnd = _leftSemaphore;
         float rightEnd = _rightSemaphore;
-        float leftFEnd = _leftSemaphore < 0 ? 180 : 0;
-        float rightFEnd = _rightSemaphore > 0 ? 180 : 0;
+        float leftFEnd = isLeftSemaphoreFlipped(_leftSemaphore) ? 180 : 0;
+        float rightFEnd = isRightSemaphoreFlipped(_rightSemaphore) ? 180 : 0;
 
         while (elapsed < duration)
         {
