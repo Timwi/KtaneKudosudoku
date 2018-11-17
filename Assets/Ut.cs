@@ -113,25 +113,14 @@ namespace Kudosudoku
         ///     A value selecting a breadth-first or a depth-first approach. Depth-first is best at quickly locating a single
         ///     value which will be present in the final required set. Breadth-first is best at quickly placing a lower bound
         ///     on the total number of individual items in the required set.</param>
-        /// <param name="skipConsistencyTest">
-        ///     When the function is particularly slow, you might want to set this to true to disable calls which are not
-        ///     required to reduce the set and are only there to ensure that the function behaves consistently.</param>
         /// <returns>
         ///     A hopefully smaller set of values that still causes the function to return true.</returns>
-        public static IEnumerable<T> ReduceRequiredSet<T>(IEnumerable<T> items, Func<ReduceRequiredSetState<T>, bool> test, bool breadthFirst = false, bool skipConsistencyTest = false)
+        public static IEnumerable<T> ReduceRequiredSet<T>(IEnumerable<T> items, Func<ReduceRequiredSetState<T>, bool> test, bool breadthFirst = false)
         {
             var state = new ReduceRequiredSetStateInternal<T>(items);
 
-            if (!skipConsistencyTest)
-                if (!test(state))
-                    throw new Exception("The function does not return true for the original set.");
-
             while (state.AnyPartitions)
             {
-                if (!skipConsistencyTest)
-                    if (!test(state))
-                        throw new Exception("The function is not consistently returning the same value for the same set, or there is an internal error in this algorithm.");
-
                 var rangeToSplit = breadthFirst ? state.LargestRange : state.SmallestRange;
                 int mid = (rangeToSplit.Item1 + rangeToSplit.Item2) / 2;
                 var split1 = new Range(rangeToSplit.Item1, mid);

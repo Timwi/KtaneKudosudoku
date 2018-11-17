@@ -1,17 +1,17 @@
 fileFormatVersion: 2
-guid: 6cfb6ccbed0f7b9449d5562b239dce52
-timeCreated: 1542406962
+guid: 781b37f024159e64da4e70f7587f178e
+timeCreated: 1542425029
 licenseType: Free
 ModelImporter:
   serializedVersion: 21
   fileIDToRecycleName:
-    100000: SemaphoreHighlight
+    100000: LetterButton2
     100002: //RootNode
-    400000: SemaphoreHighlight
+    400000: LetterButton2
     400002: //RootNode
-    2300000: SemaphoreHighlight
-    3300000: SemaphoreHighlight
-    4300000: SemaphoreHighlight
+    2300000: LetterButton2
+    3300000: LetterButton2
+    4300000: LetterButton2
   materials:
     importMaterials: 1
     materialName: 0

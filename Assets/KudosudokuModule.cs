@@ -16,6 +16,8 @@ public class KudosudokuModule : MonoBehaviour
     public KMAudio Audio;
     public GameObject SquaresParent;
 
+    public KMSelectable[] Squares;
+
     public Texture[] SnookerBallTextures;
     public Texture[] AstrologyTextures;
     public Texture[] CardSuitTextures;
@@ -39,18 +41,24 @@ public class KudosudokuModule : MonoBehaviour
     public GameObject RightPanelBacking;
     public GameObject RightPanelCover;
     public GameObject BraillePanel;
+    public GameObject LettersPanel;
 
     public KMSelectable SemaphoresLeftHand;
     public KMSelectable SemaphoresRightHand;
     public Transform SemaphoresLeftFlag;
     public Transform SemaphoresRightFlag;
-
-    public KMSelectable[] Squares;
+    public KMSelectable[] BinaryDigits;
+    public TextMesh[] BinaryDigitDisplays;
+    public KMSelectable[] BrailleDots;
+    public KMSelectable[] LetterUpDownButtons;
+    public TextMesh LetterDisplay;
 
     public GameObject ImageTemplate;
     public MeshRenderer MorseLed;
     public Material MorseLedOn;
     public Material MorseLedOff;
+    public Material BrailleDotOn;
+    public Material BrailleDotOff;
     public Material SquareSolved;
     public Material SquareUnsolved;
     public Material SquareExpectingMorse;
@@ -59,6 +67,7 @@ public class KudosudokuModule : MonoBehaviour
     public Material SquareExpectingPanel;
 
     private MeshRenderer[] _squaresMR;
+    private MeshRenderer[] _brailleDotsMR;
 
     public enum Coding
     {
@@ -109,6 +118,9 @@ public class KudosudokuModule : MonoBehaviour
     private bool _leftSemaphoreCw = true;
     private bool _rightSemaphoreCw = false;
     private Coroutine _semaphoreAnimation = null;
+    private bool[] _curBinary = new bool[5];
+    private bool[] _curBraille = new bool[6];
+    private char _curLetter = 'A';
 
     private readonly char[] _numberNames = new char[4];
     private readonly bool[] _shown = new bool[16];
@@ -142,6 +154,7 @@ public class KudosudokuModule : MonoBehaviour
         _moduleId = _moduleIdCounter++;
         _isSolved = false;
         _squaresMR = new MeshRenderer[16];
+        _brailleDotsMR = new MeshRenderer[6];
 
         LetterTextMesh.gameObject.SetActive(false);
         DigitTextMesh.gameObject.SetActive(false);
@@ -160,9 +173,23 @@ public class KudosudokuModule : MonoBehaviour
         RightPanelCover.SetActive(true);
         RightPanelBacking.SetActive(false);
         BraillePanel.SetActive(false);
+        LettersPanel.SetActive(false);
 
         SemaphoresLeftHand.OnInteract = semaphoresLeftHand;
         SemaphoresRightHand.OnInteract = semaphoresRightHand;
+        for (int i = 0; i < BinaryDigits.Length; i++)
+            BinaryDigits[i].OnInteract = binaryDigit(i);
+        for (int i = 0; i < 6; i++)
+        {
+            _brailleDotsMR[i] = BrailleDots[i].GetComponent<MeshRenderer>();
+            _brailleDotsMR[i].material = BrailleDotOff;
+            BrailleDots[i].OnInteract = brailleDot(i);
+        }
+
+        LetterUpDownButtons[0].OnInteract = lettersUpDown(-6);
+        LetterUpDownButtons[1].OnInteract = lettersUpDown(-1);
+        LetterUpDownButtons[2].OnInteract = lettersUpDown(1);
+        LetterUpDownButtons[3].OnInteract = lettersUpDown(6);
 
         for (int i = 0; i < 16; i++)
         {
@@ -197,8 +224,8 @@ public class KudosudokuModule : MonoBehaviour
         if (_numberNames.Contains('C') && _numberNames.Contains('K'))
             potentialGivens.Remove(Array.IndexOf(_codings, Coding.TapCode));
 
-        // DEBUGGING
-        potentialGivens.Remove(Array.IndexOf(_codings, Coding.Semaphores));
+        // FOR DEBUGGING: prevent a specific coding from being pre-filled
+        // potentialGivens.Remove(Array.IndexOf(_codings, Coding.Letters));
 
         var givens = Ut.ReduceRequiredSet(potentialGivens, state =>
                 // Special case: if both E and T are letter names, Morse Code must be a given
@@ -398,37 +425,35 @@ public class KudosudokuModule : MonoBehaviour
                     break;
 
                 case Coding.Semaphores:
-                    slidePanel(TopPanelCover.transform, 0, 0, 0, -7, TopPanelBacking.transform, SemaphoresPanel.transform, open: true);
+                case Coding.Binary:
+                    slidePanel(TopPanelCover.transform, 0, 0, 0, -7, TopPanelBacking.transform, (_codings[sq] == Coding.Semaphores ? SemaphoresPanel : BinaryPanel).transform, open: true);
                     _squaresMR[sq].material = SquareExpectingPanel;
-                    Squares[sq].OnInteract = semaphoresSubmit(sq);
+                    Squares[sq].OnInteract = _codings[sq] == Coding.Semaphores ? semaphoresSubmit(sq) : binarySubmit(sq);
                     _specialActiveSquare = sq;
                     break;
 
-                case Coding.Letters:
-                    break;
-                case Coding.Digits:
-                    break;
                 case Coding.Braille:
+                case Coding.Letters:
+                    slidePanel(RightPanelCover.transform, 0, -7, 0, 0, RightPanelBacking.transform, (_codings[sq] == Coding.Braille ? BraillePanel : LettersPanel).transform, open: true);
+                    _squaresMR[sq].material = SquareExpectingPanel;
+                    Squares[sq].OnInteract = _codings[sq] == Coding.Braille ? brailleSubmit(sq) : lettersSubmit(sq);
+                    _specialActiveSquare = sq;
                     break;
+
+                case Coding.Digits:
                 case Coding.MaritimeFlags:
-                    break;
-                case Coding.Binary:
-                    break;
-                case Coding.SimonSamples:
-                    break;
                 case Coding.Astrology:
-                    break;
                 case Coding.Snooker:
-                    break;
-                case Coding.Arrows:
-                    break;
                 case Coding.CardSuits:
-                    break;
                 case Coding.Mahjong:
-                    break;
                 case Coding.TheCubeSymbols:
                     break;
+
+                case Coding.SimonSamples:
+                    break;
                 case Coding.ListeningSounds:
+                    break;
+                case Coding.Arrows:
                     break;
                 default:
                     break;
@@ -611,6 +636,117 @@ public class KudosudokuModule : MonoBehaviour
             }
 
             slidePanel(TopPanelCover.transform, 0, 0, -7, 0, TopPanelBacking.transform, SemaphoresPanel.transform, open: false);
+            _specialActiveSquare = null;
+            return false;
+        };
+    }
+
+    private KMSelectable.OnInteractHandler binaryDigit(int dgt)
+    {
+        return delegate
+        {
+            if (_isSolved || _specialActiveSquare == null || _codings[_specialActiveSquare.Value] != Coding.Binary)
+                return false;
+
+            _curBinary[dgt] = !_curBinary[dgt];
+            BinaryDigitDisplays[dgt].text = _curBinary[dgt] ? "1" : "0";
+            return false;
+        };
+    }
+
+    private KMSelectable.OnInteractHandler binarySubmit(int sq)
+    {
+        return delegate
+        {
+            if (_isSolved || _specialActiveSquare == null || _codings[_specialActiveSquare.Value] != Coding.Binary)
+                return false;
+
+            var expected = Convert.ToString(_numberNames[_solution[sq]] - 'A' + 1, 2).PadLeft(5, '0');
+            var provided = _curBinary.Select(b => b ? "1" : "0").JoinString();
+
+            if (provided == expected)
+                showSquare(sq, false);
+            else
+            {
+                _squaresMR[sq].material = SquareUnsolved;
+                logStrikeReason(sq, string.Format("Binary {0}", provided), expected);
+                strikeAndReshuffle();
+            }
+
+            slidePanel(TopPanelCover.transform, 0, 0, -7, 0, TopPanelBacking.transform, BinaryPanel.transform, open: false);
+            _specialActiveSquare = null;
+            return false;
+        };
+    }
+
+    private KMSelectable.OnInteractHandler brailleDot(int bd)
+    {
+        return delegate
+        {
+            if (_isSolved || _specialActiveSquare == null || _codings[_specialActiveSquare.Value] != Coding.Braille)
+                return false;
+
+            _curBraille[bd] = !_curBraille[bd];
+            _brailleDotsMR[bd].material = _curBraille[bd] ? BrailleDotOn : BrailleDotOff;
+            return false;
+        };
+    }
+
+    private KMSelectable.OnInteractHandler brailleSubmit(int sq)
+    {
+        return delegate
+        {
+            if (_isSolved || _specialActiveSquare == null || _codings[_specialActiveSquare.Value] != Coding.Braille)
+                return false;
+
+            var expected = _brailleCodes[_numberNames[_solution[sq]] - 'A'];
+            var provided = _curBraille.Select((b, ix) => b ? (ix + 1).ToString() : "").JoinString();
+
+            if (provided == expected)
+                showSquare(sq, false);
+            else
+            {
+                _squaresMR[sq].material = SquareUnsolved;
+                logStrikeReason(sq, string.Format("Braille {0}", provided), expected);
+                strikeAndReshuffle();
+            }
+
+            slidePanel(RightPanelCover.transform, -7, 0, 0, 0, RightPanelBacking.transform, BraillePanel.transform, open: false);
+            _specialActiveSquare = null;
+            return false;
+        };
+    }
+
+    private KMSelectable.OnInteractHandler lettersUpDown(int offset)
+    {
+        return delegate
+        {
+            if (_isSolved || _specialActiveSquare == null || _codings[_specialActiveSquare.Value] != Coding.Letters)
+                return false;
+
+            _curLetter = (char) ((_curLetter - 'A' + offset + 26) % 26 + 'A');
+            LetterDisplay.text = _curLetter.ToString();
+            return false;
+        };
+    }
+
+    private KMSelectable.OnInteractHandler lettersSubmit(int sq)
+    {
+        return delegate
+        {
+            if (_isSolved || _specialActiveSquare == null || _codings[_specialActiveSquare.Value] != Coding.Letters)
+                return false;
+
+            if (_curLetter == _numberNames[_solution[sq]])
+                showSquare(sq, false);
+            else
+            {
+                _squaresMR[sq].material = SquareUnsolved;
+                logStrikeReason(sq, string.Format("Letter {0}", _curLetter), _numberNames[_solution[sq]].ToString());
+                strikeAndReshuffle();
+            }
+
+            slidePanel(RightPanelCover.transform, -7, 0, 0, 0, RightPanelBacking.transform, LettersPanel.transform, open: false);
             _specialActiveSquare = null;
             return false;
         };
@@ -813,6 +949,6 @@ public class KudosudokuModule : MonoBehaviour
 
     private void logStrikeReason(int sq, string whatEntered, string expected)
     {
-        Debug.LogFormat(@"[Kudosudoku #{0}] You received a strike because on square {1}{2} you entered {3} while it expected {4}.", _moduleId, (char) ('A' + sq % 4), (char) ('1' + sq / 4), whatEntered, expected);
+        Debug.LogFormat(@"[Kudosudoku #{0}] You received a strike on square {1}{2} because you entered {3} while it expected {4}.", _moduleId, (char) ('A' + sq % 4), (char) ('1' + sq / 4), whatEntered, expected);
     }
 }
