@@ -68,6 +68,7 @@ public class KudosudokuModule : MonoBehaviour
 
     private MeshRenderer[] _squaresMR;
     private MeshRenderer[] _brailleDotsMR;
+    private readonly Stack<GameObject> _unusedImageObjects = new Stack<GameObject>();
 
     public enum Coding
     {
@@ -95,14 +96,11 @@ public class KudosudokuModule : MonoBehaviour
     private bool _isSolved;
     private Coding[] _codings;
 
-    // Which squares are currently waiting to have their answers submitted.
-    private readonly Coroutine[] _activeSquares = new Coroutine[16];
-
     /// <summary>
     ///     Which squares currently have a panel open OR active Morse or Tap Code.</summary>
     /// <remarks>
     ///     While this is non-null, all other unsolved squares give a strike.</remarks>
-    private int? _specialActiveSquare = null;
+    private int? _activeSquare = null;
 
     /// <summary>Lists all the times at which the mouse was pressed or released while entering Morse code.</summary>
     private List<float> _morsePressTimes;
@@ -121,10 +119,11 @@ public class KudosudokuModule : MonoBehaviour
     private bool[] _curBinary = new bool[5];
     private bool[] _curBraille = new bool[6];
     private char _curLetter = 'A';
+    private float _curArrowRotation = 0;
 
     private readonly char[] _numberNames = new char[4];
     private readonly bool[] _shown = new bool[16];
-    private readonly bool[] _theCubeAlternatives = new bool[4];
+    private readonly char[] _theCubeAlternatives = new char[4];
     private readonly string[] _listeningAlternatives = new string[4];
 
     [MenuItem("A/B")]
@@ -146,6 +145,8 @@ public class KudosudokuModule : MonoBehaviour
     private static readonly string[] _simonSamplesSounds = new[] { "HiHat", "OpenHiHat", "Kick", "Snare" };
     private static readonly string[] _listeningSounds = new[] { "TaxiDispatch", "DialupInternet", "Cow", "PoliceRadioScanner", "ExtractorFan", "CensorshipBleep", "TrainStation", "MedievalWeapons", "Arcade", "DoorClosing", "Casino", "Chainsaw", "Supermarket", "CompressedAir", "SoccerMatch", "ServoMotor", "TawnyOwl", "Waterfall", "SewingMachine", "TearingFabric", "ThrushNightingale", "Zipper", "CarEngine", "VacuumCleaner", "ReloadingGlock19", "BallpointPenWriting", "Oboe", "RattlingIronChain", "Saxophone", "BookPageTurning", "Tuba", "TableTennis", "Marimba", "SqueekyToy", "PhoneRinging", "Helicopter", "TibetanNuns", "FireworkExploding", "ThroatSinging", "GlassShattering" };
     private static readonly Dictionary<char, string> _morseCode = new Dictionary<char, string> { { 'A', ".-" }, { 'B', "-..." }, { 'C', "-.-." }, { 'D', "-.." }, { 'E', "." }, { 'F', "..-." }, { 'G', "--." }, { 'H', "...." }, { 'I', ".." }, { 'J', ".---" }, { 'K', "-.-" }, { 'L', ".-.." }, { 'M', "--" }, { 'N', "-." }, { 'O', "---" }, { 'P', ".--." }, { 'Q', "--.-" }, { 'R', ".-." }, { 'S', "..." }, { 'T', "-" }, { 'U', "..-" }, { 'V', "...-" }, { 'W', ".--" }, { 'X', "-..-" }, { 'Y', "-.--" }, { 'Z', "--.." }, { '1', ".----" }, { '2', "..---" }, { '3', "...--" }, { '4', "....-" }, { '5', "....." }, { '6', "-...." }, { '7', "--..." }, { '8', "---.." }, { '9', "----." }, { '0', "-----" } };
+    private static readonly string[] _arrowDirectionNames = new[] { "down", "left", "up", "right" };
+    private static readonly float _mahjongAspectRatio = 109f / 169f;
 
     // ** ESSENTIALS ** //
 
@@ -191,16 +192,16 @@ public class KudosudokuModule : MonoBehaviour
         LetterUpDownButtons[2].OnInteract = lettersUpDown(1);
         LetterUpDownButtons[3].OnInteract = lettersUpDown(6);
 
-        for (int i = 0; i < 16; i++)
+        for (int sq = 0; sq < 16; sq++)
         {
-            _squaresMR[i] = Squares[i].GetComponent<MeshRenderer>();
-            _squaresMR[i].material = SquareUnsolved;
-            Squares[i].OnInteract = squarePress(i);
+            _squaresMR[sq] = Squares[sq].GetComponent<MeshRenderer>();
+            _squaresMR[sq].material = SquareUnsolved;
+            Squares[sq].OnInteract = squarePress(sq);
         }
 
         for (int i = 0; i < 4; i++)
         {
-            _theCubeAlternatives[i] = Rnd.Range(0, 2) != 0;
+            _theCubeAlternatives[i] = (char) ('A' + i + (Rnd.Range(0, 2) != 0 ? 10 : 0));
             _listeningAlternatives[i] = _listeningSounds[4 * Rnd.Range(0, 10) + i];
         }
 
@@ -225,7 +226,7 @@ public class KudosudokuModule : MonoBehaviour
             potentialGivens.Remove(Array.IndexOf(_codings, Coding.TapCode));
 
         // FOR DEBUGGING: prevent a specific coding from being pre-filled
-        // potentialGivens.Remove(Array.IndexOf(_codings, Coding.Letters));
+        potentialGivens.Remove(Array.IndexOf(_codings, Coding.Mahjong));
 
         var givens = Ut.ReduceRequiredSet(potentialGivens, state =>
                 // Special case: if both E and T are letter names, Morse Code must be a given
@@ -250,10 +251,17 @@ public class KudosudokuModule : MonoBehaviour
     {
         if (_shown[sq])
             return;
+        if (!initial)
+        {
+            Debug.LogFormat(@"[Kudosudoku #{0}] Square {1}{2} correct.", _moduleId, (char) ('A' + sq % 4), (char) ('1' + sq / 4));
+            Audio.PlaySoundAtTransform("Correct", Squares[sq].transform);
+        }
         _shown[sq] = true;
         if (_shown.All(b => b))
         {
             _isSolved = true;
+            Debug.LogFormat(@"[Kudosudoku #{0}] Module solved.", _moduleId);
+            Audio.PlaySoundAtTransform("Disarm", transform);
             Module.HandlePass();
         }
 
@@ -278,7 +286,7 @@ public class KudosudokuModule : MonoBehaviour
             case Coding.TheCubeSymbols:
             {
                 reparentAndActivate(TheCubeSymbolsTextMesh.transform, square);
-                TheCubeSymbolsTextMesh.text = ((char) ('A' + _solution[sq] + (_theCubeAlternatives[_solution[sq]] ? 10 : 0))).ToString();
+                TheCubeSymbolsTextMesh.text = _theCubeAlternatives[_solution[sq]].ToString();
                 break;
             }
 
@@ -318,7 +326,7 @@ public class KudosudokuModule : MonoBehaviour
             case Coding.Arrows:
             {
                 reparentAndActivate(ArrowsParent.transform, square);
-                ArrowsParent.transform.localEulerAngles = new Vector3(0, 0, -90 * _solution[sq]);
+                ArrowsParent.transform.localEulerAngles = new Vector3(0, 0, -90 * (_solution[sq] + 1));
                 break;
             }
 
@@ -355,7 +363,7 @@ public class KudosudokuModule : MonoBehaviour
                     _codings[sq] == Coding.Astrology ? AstrologyTextures :
                     _codings[sq] == Coding.Mahjong ? MahjongTextures :
                     _codings[sq] == Coding.CardSuits ? CardSuitTextures : null;
-                var mr = createGraphic(square, _codings[sq] == Coding.Mahjong ? 109f / 169f : 1);
+                var mr = createGraphic(square, _codings[sq] == Coding.Mahjong ? _mahjongAspectRatio : 1);
                 mr.material.mainTexture = textures[_solution[sq]];
                 break;
             }
@@ -371,11 +379,11 @@ public class KudosudokuModule : MonoBehaviour
             if (_isSolved)
                 return false;
 
-            if (_specialActiveSquare != null && _specialActiveSquare.Value != sq)
+            if (_activeSquare != null && _activeSquare.Value != sq)
             {
                 Module.HandleStrike();
                 Debug.LogFormat(@"[Kudosudoku #{0}] You received a strike because you pressed on square {1}{2} while square {3}{4} was still waiting for {5} input.",
-                    _moduleId, (char) ('A' + sq % 4), (char) ('1' + sq / 4), (char) ('A' + _specialActiveSquare.Value % 4), (char) ('1' + _specialActiveSquare.Value / 4), _codings[_specialActiveSquare.Value]);
+                    _moduleId, (char) ('A' + sq % 4), (char) ('1' + sq / 4), (char) ('A' + _activeSquare.Value % 4), (char) ('1' + _activeSquare.Value / 4), _codings[_activeSquare.Value]);
                 return false;
             }
 
@@ -385,28 +393,28 @@ public class KudosudokuModule : MonoBehaviour
                 switch (_codings[sq])
                 {
                     case Coding.TapCode:
-                        StartCoroutine(soundTapCode(_tapCodes[_numberNames[_solution[sq]] - 'A']));
+                        StartCoroutine(playTapCode(_tapCodes[_numberNames[_solution[sq]] - 'A'], Squares[sq].transform));
                         break;
 
                     case Coding.SimonSamples:
-                        Audio.PlaySoundAtTransform(_simonSamplesSounds[_solution[sq]], transform);
+                        Audio.PlaySoundAtTransform(_simonSamplesSounds[_solution[sq]], Squares[sq].transform);
                         break;
 
                     case Coding.ListeningSounds:
-                        playListeningSound(_listeningAlternatives[_solution[sq]]);
+                        playListeningSound(_listeningAlternatives[_solution[sq]], Squares[sq].transform);
                         break;
                 }
                 return false;
             }
 
             // User clicked on an unsolved square
+            _activeSquare = sq;
             switch (_codings[sq])
             {
                 case Coding.MorseCode:
                     // Upon the first click, the square turns “dark red”
                     _squaresMR[sq].material = SquareExpectingMorse;
                     _morsePressTimes = new List<float>();
-                    _specialActiveSquare = sq;
 
                     // Henceforth, the square expects Morse code input
                     Squares[sq].OnInteract = morseMouseDown(sq);
@@ -418,7 +426,6 @@ public class KudosudokuModule : MonoBehaviour
                     // Upon the first click, the square turns “blue”
                     _squaresMR[sq].material = SquareExpectingTapCode;
                     _tapCodeInput = new List<int>();
-                    _specialActiveSquare = sq;
 
                     // Henceforth, the square expects Tap Code input
                     Squares[sq].OnInteract = tapCodeMouseDown(sq);
@@ -429,7 +436,6 @@ public class KudosudokuModule : MonoBehaviour
                     slidePanel(TopPanelCover.transform, 0, 0, 0, -7, TopPanelBacking.transform, (_codings[sq] == Coding.Semaphores ? SemaphoresPanel : BinaryPanel).transform, open: true);
                     _squaresMR[sq].material = SquareExpectingPanel;
                     Squares[sq].OnInteract = _codings[sq] == Coding.Semaphores ? semaphoresSubmit(sq) : binarySubmit(sq);
-                    _specialActiveSquare = sq;
                     break;
 
                 case Coding.Braille:
@@ -437,25 +443,64 @@ public class KudosudokuModule : MonoBehaviour
                     slidePanel(RightPanelCover.transform, 0, -7, 0, 0, RightPanelBacking.transform, (_codings[sq] == Coding.Braille ? BraillePanel : LettersPanel).transform, open: true);
                     _squaresMR[sq].material = SquareExpectingPanel;
                     Squares[sq].OnInteract = _codings[sq] == Coding.Braille ? brailleSubmit(sq) : lettersSubmit(sq);
-                    _specialActiveSquare = sq;
                     break;
 
                 case Coding.Digits:
+                    reparentAndActivate(DigitTextMesh.transform, Squares[sq].transform);
+                    startCycle(sq, i =>
+                    {
+                        Audio.PlaySoundAtTransform("Selection", Squares[sq].transform);
+                        DigitTextMesh.text = (i + 1).ToString();
+                    }, () => { DigitTextMesh.gameObject.SetActive(false); }, "Digit", new[] { "1", "2", "3", "4" }, 2f);
+                    break;
+
                 case Coding.MaritimeFlags:
+                    startGraphicsCycle(sq, 1, _numberNames.Select(ch => "Flag-" + ch).Select(name => MaritimeFlagTextures.First(t => t.name == name)).ToArray(), "maritime flag", _numberNames.Select(ch => ch.ToString()).ToArray(), 2f);
+                    break;
+
                 case Coding.Astrology:
+                    startGraphicsCycle(sq, 1, AstrologyTextures, "astrological symbol", new[] { "Fire", "Water", "Earth", "Air" }, 2f);
+                    break;
+
                 case Coding.Snooker:
+                    startGraphicsCycle(sq, 1, SnookerBallTextures, "Snooker ball", new[] { "Red", "Yellow", "Green", "Brown" }, 2f);
+                    break;
+
                 case Coding.CardSuits:
+                    startGraphicsCycle(sq, 1, CardSuitTextures, "card suit", new[] { "spades", "hearts", "clubs", "diamonds" }, 2f);
+                    break;
+
                 case Coding.Mahjong:
+                    startGraphicsCycle(sq, _mahjongAspectRatio, MahjongTextures, "Mahjong tile", new[] { "plum", "orchid", "chrysanthemum", "bamboo" }, 2f);
+                    break;
+
                 case Coding.TheCubeSymbols:
+                    reparentAndActivate(TheCubeSymbolsTextMesh.transform, Squares[sq].transform);
+                    startCycle(sq, i =>
+                    {
+                        Audio.PlaySoundAtTransform("Selection", Squares[sq].transform);
+                        TheCubeSymbolsTextMesh.text = _theCubeAlternatives[i].ToString();
+                    }, () => { TheCubeSymbolsTextMesh.gameObject.SetActive(false); }, "The Cube symbol", _theCubeAlternatives.Select(ch => ch.ToString()).ToArray(), 2f);
                     break;
 
                 case Coding.SimonSamples:
+                    startCycle(sq, i => { Audio.PlaySoundAtTransform(_simonSamplesSounds[i], Squares[sq].transform); }, null, "Simon Samples sample", _simonSamplesSounds, 2f);
                     break;
+
                 case Coding.ListeningSounds:
+                    startCycle(sq, i => { playListeningSound(_listeningAlternatives[i], Squares[sq].transform); }, null, "Listening sound", _listeningSounds, 6f);
                     break;
+
                 case Coding.Arrows:
-                    break;
-                default:
+                    reparentAndActivate(ArrowsParent.transform, Squares[sq].transform);
+                    var coroutine = StartCoroutine(spinArrow());
+                    Squares[sq].OnInteract = delegate
+                    {
+                        StopCoroutine(coroutine);
+                        var input = _curArrowRotation < 45 ? 3 : _curArrowRotation < 135 ? 2 : _curArrowRotation < 225 ? 1 : _curArrowRotation < 315 ? 0 : 3;
+                        submitAnswer(sq, input, "arrow direction " + _arrowDirectionNames[input], _arrowDirectionNames[_solution[sq]]);
+                        return false;
+                    };
                     break;
             }
             return false;
@@ -493,7 +538,7 @@ public class KudosudokuModule : MonoBehaviour
             yield return null;
 
         // User finished entering Morse Code.
-        _specialActiveSquare = null;
+        _activeSquare = null;
         Squares[sq].OnInteract = squarePress(sq);
         Squares[sq].OnInteractEnded = null;
 
@@ -522,8 +567,7 @@ public class KudosudokuModule : MonoBehaviour
 
         wrongAnswer:
         _squaresMR[sq].material = SquareUnsolved;
-        logStrikeReason(sq, reasonForWrongAnswer, _numberNames[_solution[sq]].ToString());
-        strikeAndReshuffle();
+        strikeAndReshuffle(sq, reasonForWrongAnswer, _numberNames[_solution[sq]].ToString());
         _morsePressTimes = null;
         yield break;
 
@@ -535,6 +579,7 @@ public class KudosudokuModule : MonoBehaviour
 
     private KMSelectable.OnInteractHandler tapCodeMouseDown(int sq)
     {
+        Coroutine coroutine = null;
         return delegate
         {
             if (_tapCodeLastCodeStillActive)
@@ -544,9 +589,9 @@ public class KudosudokuModule : MonoBehaviour
                 _tapCodeLastCodeStillActive = true;
                 _tapCodeInput.Add(1);
             }
-            if (_activeSquares[sq] != null)
-                StopCoroutine(_activeSquares[sq]);
-            _activeSquares[sq] = StartCoroutine(acknowledgeTapCode(sq));
+            if (coroutine != null)
+                StopCoroutine(coroutine);
+            coroutine = StartCoroutine(acknowledgeTapCode(sq));
             return false;
         };
     }
@@ -554,14 +599,14 @@ public class KudosudokuModule : MonoBehaviour
     private IEnumerator acknowledgeTapCode(int sq)
     {
         yield return new WaitForSeconds(1f);
-        Audio.PlaySoundAtTransform("MiniTap", transform);
+        Audio.PlaySoundAtTransform("MiniTap", Squares[sq].transform);
         _tapCodeLastCodeStillActive = false;
 
         if (_tapCodeInput.Count < 2)
             yield break;
 
         // User finished entering Tap Code.
-        _specialActiveSquare = null;
+        _activeSquare = null;
         Squares[sq].OnInteract = squarePress(sq);
 
         var expected = _tapCodes[_numberNames[_solution[sq]] - 'A'];
@@ -572,9 +617,8 @@ public class KudosudokuModule : MonoBehaviour
         }
         else
         {
-            logStrikeReason(sq, string.Format("the Tap Code “{0}”", _tapCodeInput.JoinString(", ")), string.Format("“{0}”", expected.JoinString(", ")));
+            strikeAndReshuffle(sq, string.Format("the Tap Code “{0}”", _tapCodeInput.JoinString(", ")), string.Format("“{0}”", expected.JoinString(", ")));
             _squaresMR[sq].material = SquareUnsolved;
-            strikeAndReshuffle();
         }
 
         _tapCodeInput = null;
@@ -582,7 +626,7 @@ public class KudosudokuModule : MonoBehaviour
 
     private bool semaphoresLeftHand()
     {
-        if (_isSolved || _specialActiveSquare == null || _codings[_specialActiveSquare.Value] != Coding.Semaphores)
+        if (_isSolved || _activeSquare == null || _codings[_activeSquare.Value] != Coding.Semaphores)
             return false;
 
         if (_leftSemaphore == (_leftSemaphoreCw ? -45 : 225))
@@ -595,7 +639,7 @@ public class KudosudokuModule : MonoBehaviour
 
     private bool semaphoresRightHand()
     {
-        if (_isSolved || _specialActiveSquare == null || _codings[_specialActiveSquare.Value] != Coding.Semaphores)
+        if (_isSolved || _activeSquare == null || _codings[_activeSquare.Value] != Coding.Semaphores)
             return false;
 
         if (_rightSemaphore == (_rightSemaphoreCw ? -225 : 45))
@@ -610,7 +654,7 @@ public class KudosudokuModule : MonoBehaviour
     {
         return delegate
         {
-            if (_isSolved || _specialActiveSquare == null || _codings[_specialActiveSquare.Value] != Coding.Semaphores)
+            if (_isSolved || _activeSquare == null || _codings[_activeSquare.Value] != Coding.Semaphores)
                 return false;
 
             var leftExpect = _semaphoreLeftFlagOrientations[_numberNames[_solution[sq]] - 'A'];
@@ -628,15 +672,14 @@ public class KudosudokuModule : MonoBehaviour
                 orientationNames[225] = orientationNames[-135] = "SE";
                 orientationNames[-90] = "E";
                 orientationNames[-45] = "NE";
-                _squaresMR[sq].material = SquareUnsolved;
-                logStrikeReason(sq,
+                strikeAndReshuffle(sq,
                     string.Format("Semaphores {0}.{1}", orientationNames[_leftSemaphore], orientationNames[_rightSemaphore]),
                     string.Format("{0}.{1}", orientationNames[leftExpect], orientationNames[rightExpect]));
-                strikeAndReshuffle();
             }
 
             slidePanel(TopPanelCover.transform, 0, 0, -7, 0, TopPanelBacking.transform, SemaphoresPanel.transform, open: false);
-            _specialActiveSquare = null;
+            _activeSquare = null;
+            Squares[sq].OnInteract = squarePress(sq);
             return false;
         };
     }
@@ -645,7 +688,7 @@ public class KudosudokuModule : MonoBehaviour
     {
         return delegate
         {
-            if (_isSolved || _specialActiveSquare == null || _codings[_specialActiveSquare.Value] != Coding.Binary)
+            if (_isSolved || _activeSquare == null || _codings[_activeSquare.Value] != Coding.Binary)
                 return false;
 
             _curBinary[dgt] = !_curBinary[dgt];
@@ -658,7 +701,7 @@ public class KudosudokuModule : MonoBehaviour
     {
         return delegate
         {
-            if (_isSolved || _specialActiveSquare == null || _codings[_specialActiveSquare.Value] != Coding.Binary)
+            if (_isSolved || _activeSquare == null || _codings[_activeSquare.Value] != Coding.Binary)
                 return false;
 
             var expected = Convert.ToString(_numberNames[_solution[sq]] - 'A' + 1, 2).PadLeft(5, '0');
@@ -667,14 +710,11 @@ public class KudosudokuModule : MonoBehaviour
             if (provided == expected)
                 showSquare(sq, false);
             else
-            {
-                _squaresMR[sq].material = SquareUnsolved;
-                logStrikeReason(sq, string.Format("Binary {0}", provided), expected);
-                strikeAndReshuffle();
-            }
+                strikeAndReshuffle(sq, string.Format("Binary {0}", provided), expected);
 
             slidePanel(TopPanelCover.transform, 0, 0, -7, 0, TopPanelBacking.transform, BinaryPanel.transform, open: false);
-            _specialActiveSquare = null;
+            _activeSquare = null;
+            Squares[sq].OnInteract = squarePress(sq);
             return false;
         };
     }
@@ -683,7 +723,7 @@ public class KudosudokuModule : MonoBehaviour
     {
         return delegate
         {
-            if (_isSolved || _specialActiveSquare == null || _codings[_specialActiveSquare.Value] != Coding.Braille)
+            if (_isSolved || _activeSquare == null || _codings[_activeSquare.Value] != Coding.Braille)
                 return false;
 
             _curBraille[bd] = !_curBraille[bd];
@@ -696,7 +736,7 @@ public class KudosudokuModule : MonoBehaviour
     {
         return delegate
         {
-            if (_isSolved || _specialActiveSquare == null || _codings[_specialActiveSquare.Value] != Coding.Braille)
+            if (_isSolved || _activeSquare == null || _codings[_activeSquare.Value] != Coding.Braille)
                 return false;
 
             var expected = _brailleCodes[_numberNames[_solution[sq]] - 'A'];
@@ -705,14 +745,11 @@ public class KudosudokuModule : MonoBehaviour
             if (provided == expected)
                 showSquare(sq, false);
             else
-            {
-                _squaresMR[sq].material = SquareUnsolved;
-                logStrikeReason(sq, string.Format("Braille {0}", provided), expected);
-                strikeAndReshuffle();
-            }
+                strikeAndReshuffle(sq, string.Format("Braille {0}", provided), expected);
 
             slidePanel(RightPanelCover.transform, -7, 0, 0, 0, RightPanelBacking.transform, BraillePanel.transform, open: false);
-            _specialActiveSquare = null;
+            _activeSquare = null;
+            Squares[sq].OnInteract = squarePress(sq);
             return false;
         };
     }
@@ -721,7 +758,7 @@ public class KudosudokuModule : MonoBehaviour
     {
         return delegate
         {
-            if (_isSolved || _specialActiveSquare == null || _codings[_specialActiveSquare.Value] != Coding.Letters)
+            if (_isSolved || _activeSquare == null || _codings[_activeSquare.Value] != Coding.Letters)
                 return false;
 
             _curLetter = (char) ((_curLetter - 'A' + offset + 26) % 26 + 'A');
@@ -734,20 +771,17 @@ public class KudosudokuModule : MonoBehaviour
     {
         return delegate
         {
-            if (_isSolved || _specialActiveSquare == null || _codings[_specialActiveSquare.Value] != Coding.Letters)
+            if (_isSolved || _activeSquare == null || _codings[_activeSquare.Value] != Coding.Letters)
                 return false;
 
             if (_curLetter == _numberNames[_solution[sq]])
                 showSquare(sq, false);
             else
-            {
-                _squaresMR[sq].material = SquareUnsolved;
-                logStrikeReason(sq, string.Format("Letter {0}", _curLetter), _numberNames[_solution[sq]].ToString());
-                strikeAndReshuffle();
-            }
+                strikeAndReshuffle(sq, string.Format("Letter {0}", _curLetter), _numberNames[_solution[sq]].ToString());
 
             slidePanel(RightPanelCover.transform, -7, 0, 0, 0, RightPanelBacking.transform, LettersPanel.transform, open: false);
-            _specialActiveSquare = null;
+            _activeSquare = null;
+            Squares[sq].OnInteract = squarePress(sq);
             return false;
         };
     }
@@ -805,31 +839,31 @@ public class KudosudokuModule : MonoBehaviour
         }
     }
 
-    private void playListeningSound(string soundName)
+    private void playListeningSound(string soundName, Transform transf)
     {
         if (_listeningPlaying != null)
             StopCoroutine(_listeningPlaying);
-        _listeningPlaying = StartCoroutine(playListeningSoundCoroutine(soundName));
+        _listeningPlaying = StartCoroutine(playListeningSoundCoroutine(soundName, transf));
     }
 
-    private IEnumerator playListeningSoundCoroutine(string soundName)
+    private IEnumerator playListeningSoundCoroutine(string soundName, Transform transf)
     {
-        Audio.PlaySoundAtTransform("TapePlay", transform);
+        Audio.PlaySoundAtTransform("TapePlay", transf);
         yield return new WaitForSeconds(.5f);
-        Audio.PlaySoundAtTransform(soundName, transform);
+        Audio.PlaySoundAtTransform(soundName, transf);
         yield return new WaitForSeconds(4.5f);
-        Audio.PlaySoundAtTransform("TapeStop", transform);
+        Audio.PlaySoundAtTransform("TapeStop", transf);
         _listeningPlaying = null;
     }
 
-    private IEnumerator soundTapCode(int[] taps)
+    private IEnumerator playTapCode(int[] taps, Transform transf)
     {
         yield return new WaitForSeconds(.1f);
         for (int i = 0; i < taps.Length; i++)
         {
             for (int a = 0; a < taps[i]; a++)
             {
-                Audio.PlaySoundAtTransform("Tap", transform);
+                Audio.PlaySoundAtTransform("Tap", transf);
                 yield return new WaitForSeconds(.5f);
             }
             yield return new WaitForSeconds(.5f);
@@ -890,11 +924,83 @@ public class KudosudokuModule : MonoBehaviour
         _semaphoreAnimation = null;
     }
 
-    // ** MINOR HELPER FUNCTIONS ** //
+    private IEnumerator spinArrow()
+    {
+        _curArrowRotation = Rnd.Range(0f, 360f);
+        var direction = Rnd.Range(0, 2) == 0 ? 360 : -360;
+        while (true)
+        {
+            _curArrowRotation = (_curArrowRotation + direction * Time.deltaTime + 360) % 360;
+            ArrowsParent.transform.localEulerAngles = new Vector3(0, 0, _curArrowRotation);
+            yield return null;
+        }
+    }
 
-    private void strikeAndReshuffle()
+    // ** CYCLES (graphics, sounds) ** //
+
+    private void startCycle(int sq, Action<int> showOption, Action cleanUp, string codingName, string[] answerNames, float submissionDelay)
+    {
+        _squaresMR[sq].material = SquareExpectingPanel;
+        var cycle = Enumerable.Range(0, 4).ToArray().Shuffle();
+        showOption(cycle[0]);
+        var ix = 0;
+        var coroutine = StartCoroutine(submitAfterDelay(sq, submissionDelay, cycle[0], codingName, answerNames, cleanUp));
+
+        Squares[sq].OnInteract = delegate
+        {
+            if (coroutine != null)
+                StopCoroutine(coroutine);
+            ix = (ix + 1) % 4;
+            showOption(cycle[ix]);
+            coroutine = StartCoroutine(submitAfterDelay(sq, submissionDelay, cycle[ix], codingName, answerNames, cleanUp));
+            return false;
+        };
+    }
+
+    private void startGraphicsCycle(int sq, float widthRatio, Texture[] textures, string codingName, string[] answerNames, float submissionDelay)
+    {
+        var gr = createGraphic(Squares[sq].transform, widthRatio);
+        startCycle(sq,
+            i =>
+            {
+                Audio.PlaySoundAtTransform("Selection", Squares[sq].transform);
+                gr.material.mainTexture = textures[i];
+            },
+            () =>
+            {
+                gr.gameObject.SetActive(false);
+                _unusedImageObjects.Push(gr.gameObject);
+            },
+            codingName, answerNames, submissionDelay);
+    }
+
+    private IEnumerator submitAfterDelay(int sq, float submissionDelay, int answer, string codingName, string[] answerNames, Action cleanUp)
+    {
+        yield return new WaitForSeconds(submissionDelay);
+        if (cleanUp != null)
+            cleanUp();
+        submitAnswer(sq, answer, codingName + " " + answerNames[answer], answerNames[_solution[sq]]);
+    }
+
+    // ** OTHER FUNCTIONS ** //
+
+    private void submitAnswer(int sq, int answer, string whatEntered, string expected)
+    {
+        if (answer == _solution[sq])
+            showSquare(sq, false);
+        else
+            strikeAndReshuffle(sq, whatEntered, expected);
+        _activeSquare = null;
+        Squares[sq].OnInteract = squarePress(sq);
+    }
+
+    private void strikeAndReshuffle(int sq, string whatEntered, string expected)
     {
         Module.HandleStrike();
+
+        Debug.LogFormat(@"[Kudosudoku #{0}] You received a strike on square {1}{2} because you entered {3} while it expected {4}.", _moduleId, (char) ('A' + sq % 4), (char) ('1' + sq / 4), whatEntered, expected);
+
+        _squaresMR[sq].material = SquareUnsolved;
 
         var oldCodings = _codings.ToArray();
         var oldIndexes = Enumerable.Range(0, 16).Where(ix => !_shown[ix]).ToArray();
@@ -916,7 +1022,7 @@ public class KudosudokuModule : MonoBehaviour
 
     private MeshRenderer createGraphic(Transform square, float widthRatio)
     {
-        var obj = Instantiate(ImageTemplate);
+        var obj = _unusedImageObjects.Count > 0 ? _unusedImageObjects.Pop() : Instantiate(ImageTemplate);
         obj.transform.parent = square;
         obj.transform.localPosition = new Vector3(0, 0, -.001f);
         obj.transform.localRotation = Quaternion.identity;
@@ -945,10 +1051,5 @@ public class KudosudokuModule : MonoBehaviour
     {
         t /= duration;
         return (end - start) * t * t + start;
-    }
-
-    private void logStrikeReason(int sq, string whatEntered, string expected)
-    {
-        Debug.LogFormat(@"[Kudosudoku #{0}] You received a strike on square {1}{2} because you entered {3} while it expected {4}.", _moduleId, (char) ('A' + sq % 4), (char) ('1' + sq / 4), whatEntered, expected);
     }
 }
