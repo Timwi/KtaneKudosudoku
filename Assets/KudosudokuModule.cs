@@ -65,7 +65,7 @@ public class KudosudokuModule : MonoBehaviour
     public Material SquareExpectingMorse;
     public Material SquareExpectingMorseDown;
     public Material SquareExpectingTapCode;
-    public Material SquareExpectingPanel;
+    public Material SquareExpectingAnswer;
 
     private MeshRenderer[] _squaresMR;
     private MeshRenderer[] _brailleDotsMR;
@@ -428,14 +428,14 @@ public class KudosudokuModule : MonoBehaviour
                 case Coding.Semaphores:
                 case Coding.Binary:
                     slidePanel(TopPanelCover.transform, 0, 0, 0, -7, TopPanelBacking.transform, (_codings[sq] == Coding.Semaphores ? SemaphoresPanel : BinaryPanel).transform, open: true);
-                    _squaresMR[sq].material = SquareExpectingPanel;
+                    _squaresMR[sq].material = SquareExpectingAnswer;
                     Squares[sq].OnInteract = _codings[sq] == Coding.Semaphores ? semaphoresSubmit(sq) : binarySubmit(sq);
                     break;
 
                 case Coding.Braille:
                 case Coding.Letters:
                     slidePanel(RightPanelCover.transform, 0, -7, 0, 0, RightPanelBacking.transform, (_codings[sq] == Coding.Braille ? BraillePanel : LettersPanel).transform, open: true);
-                    _squaresMR[sq].material = SquareExpectingPanel;
+                    _squaresMR[sq].material = SquareExpectingAnswer;
                     Squares[sq].OnInteract = _codings[sq] == Coding.Braille ? brailleSubmit(sq) : lettersSubmit(sq);
                     break;
 
@@ -487,7 +487,7 @@ public class KudosudokuModule : MonoBehaviour
 
                 case Coding.Arrows:
                     reparentAndActivate(ArrowsParent.transform, Squares[sq].transform);
-                    _squaresMR[sq].material = SquareExpectingPanel;
+                    _squaresMR[sq].material = SquareExpectingAnswer;
                     var coroutine = StartCoroutine(spinArrow());
                     Squares[sq].OnInteract = delegate
                     {
@@ -939,7 +939,7 @@ public class KudosudokuModule : MonoBehaviour
 
     private void startCycle(int sq, Action<int> showOption, Action cleanUp, string codingName, string[] answerNames, float submissionDelay)
     {
-        _squaresMR[sq].material = SquareExpectingPanel;
+        _squaresMR[sq].material = SquareExpectingAnswer;
         var cycle = Enumerable.Range(0, 4).ToArray().Shuffle();
         showOption(cycle[0]);
         var ix = 0;
