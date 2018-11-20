@@ -253,8 +253,9 @@ public class KudosudokuModule : MonoBehaviour
         {
             _isSolved = true;
             Debug.LogFormat(@"[Kudosudoku #{0}] Module solved.", _moduleId);
-            Audio.PlaySoundAtTransform("Disarm", transform);
             Module.HandlePass();
+            if (Bomb.GetSolvedModuleNames().Count < Bomb.GetSolvableModuleNames().Count)
+                Audio.PlaySoundAtTransform("Disarm", transform);
         }
 
         var square = Squares[sq].transform;
@@ -485,11 +486,13 @@ public class KudosudokuModule : MonoBehaviour
 
                 case Coding.Arrows:
                     reparentAndActivate(ArrowsParent.transform, Squares[sq].transform);
+                    _squaresMR[sq].material = SquareExpectingPanel;
                     var coroutine = StartCoroutine(spinArrow());
                     Squares[sq].OnInteract = delegate
                     {
                         StopCoroutine(coroutine);
                         var input = _curArrowRotation < 45 ? 3 : _curArrowRotation < 135 ? 2 : _curArrowRotation < 225 ? 1 : _curArrowRotation < 315 ? 0 : 3;
+                        ArrowsParent.gameObject.SetActive(false);
                         submitAnswer(sq, input, "arrow direction " + _arrowDirectionNames[input], _arrowDirectionNames[_solution[sq]]);
                         return false;
                     };
