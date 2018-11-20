@@ -26,6 +26,7 @@ public class KudosudokuModule : MonoBehaviour
     public TextMesh LetterTextMesh;
     public TextMesh DigitTextMesh;
     public TextMesh TheCubeSymbolsTextMesh;
+    public TextMesh MorseWrong;
 
     public GameObject SemaphoresParent;
     public GameObject BrailleParent;
@@ -121,6 +122,7 @@ public class KudosudokuModule : MonoBehaviour
     private bool[] _curBraille = new bool[6];
     private char _curLetter = 'A';
     private float _curArrowRotation = 0;
+    private Coroutine _morseWrong = null;
 
     private readonly char[] _numberNames = new char[4];
     private readonly bool[] _shown = new bool[16];
@@ -159,6 +161,7 @@ public class KudosudokuModule : MonoBehaviour
         MorseParent.SetActive(false);
         ArrowsParent.SetActive(false);
         ImageTemplate.gameObject.SetActive(false);
+        MorseWrong.gameObject.SetActive(false);
 
         TopPanelCover.SetActive(true);
         TopPanelBacking.SetActive(false);
@@ -545,6 +548,7 @@ public class KudosudokuModule : MonoBehaviour
             if ("ET".Contains(_numberNames[_solution[sq]]))
                 goto correctAnswer;
             reasonForWrongAnswer = "Morse code for E or T";
+            MorseWrong.text = "E/T";
             goto wrongAnswer;
         }
 
@@ -560,17 +564,29 @@ public class KudosudokuModule : MonoBehaviour
         if (character.Key == _numberNames[_solution[sq]])
             goto correctAnswer;
         reasonForWrongAnswer = character.Key == '\0' ? "an invalid Morse code" : "Morse code for " + character.Key;
+        MorseWrong.text = character.Key == '\0' ? "?" : character.Key.ToString();
 
         wrongAnswer:
         _squaresMR[sq].material = SquareUnsolved;
         strikeAndReshuffle(sq, reasonForWrongAnswer, _numberNames[_solution[sq]].ToString());
         _morsePressTimes = null;
+        reparentAndActivate(MorseWrong.transform, Squares[sq].transform);
+        if (_morseWrong != null)
+            StopCoroutine(_morseWrong);
+        _morseWrong = StartCoroutine(disappearWrongMorse());
         yield break;
 
         correctAnswer:
         Debug.LogFormat(@"[Kudosudoku #{0}] Square {1}{2}: correct Morse code input ({3}).", _moduleId, (char) ('A' + sq % 4), (char) ('1' + sq / 4), _numberNames[_solution[sq]]);
         showSquare(sq, initial: false);
         _morsePressTimes = null;
+    }
+
+    private IEnumerator disappearWrongMorse()
+    {
+        yield return new WaitForSeconds(2.4f);
+        MorseWrong.gameObject.SetActive(false);
+        _morseWrong = null;
     }
 
     private KMSelectable.OnInteractHandler tapCodeMouseDown(int sq)
