@@ -133,6 +133,27 @@ public class KudosudokuModule : MonoBehaviour
     private char _morseCharacterToBlink;
     private Coroutine _morseBlinking = null;
     private Coroutine _morseWrong = null;
+    private int _activePanelAnimations = 0;
+    private sealed class PanelAnimationInfo
+    {
+        public Transform Cover;
+        public int X1, X2, Z1, Z2;
+        public Transform Backing;
+        public Transform Panel;
+        public bool Open;
+        public PanelAnimationInfo(Transform cover, int x1, int x2, int z1, int z2, Transform backing, Transform panel, bool open)
+        {
+            Cover = cover;
+            X1 = x1;
+            X2 = x2;
+            Z1 = z1;
+            Z2 = z2;
+            Backing = backing;
+            Panel = panel;
+            Open = open;
+        }
+    }
+    private readonly Queue<PanelAnimationInfo> _panelAnimationQueue = new Queue<PanelAnimationInfo>();
 
     private readonly char[] _numberNames = new char[4];
     private readonly bool[] _shown = new bool[16];
@@ -252,6 +273,7 @@ public class KudosudokuModule : MonoBehaviour
 
         foreach (var ix in givens)
             showSquare(ix, initial: true);
+        StartCoroutine(processPanelAnimationQueue());
     }
 
     private void setTpCbText(int sq, string text, int fontSize)
@@ -471,14 +493,14 @@ public class KudosudokuModule : MonoBehaviour
 
                 case Coding.Semaphores:
                 case Coding.Binary:
-                    slidePanel(TopPanelCover.transform, 0, 0, 0, -7, TopPanelBacking.transform, (_codings[sq] == Coding.Semaphores ? SemaphoresPanel : BinaryPanel).transform, open: true);
+                    _panelAnimationQueue.Enqueue(new PanelAnimationInfo(TopPanelCover.transform, 0, 0, 0, -7, TopPanelBacking.transform, (_codings[sq] == Coding.Semaphores ? SemaphoresPanel : BinaryPanel).transform, open: true));
                     _squaresMR[sq].material = SquareExpectingAnswer;
                     Squares[sq].OnInteract = _codings[sq] == Coding.Semaphores ? semaphoresSubmit(sq) : binarySubmit(sq);
                     break;
 
                 case Coding.Braille:
                 case Coding.Letters:
-                    slidePanel(RightPanelCover.transform, 0, -7, 0, 0, RightPanelBacking.transform, (_codings[sq] == Coding.Braille ? BraillePanel : LettersPanel).transform, open: true);
+                    _panelAnimationQueue.Enqueue(new PanelAnimationInfo(RightPanelCover.transform, 0, -7, 0, 0, RightPanelBacking.transform, (_codings[sq] == Coding.Braille ? BraillePanel : LettersPanel).transform, open: true));
                     _squaresMR[sq].material = SquareExpectingAnswer;
                     Squares[sq].OnInteract = _codings[sq] == Coding.Braille ? brailleSubmit(sq) : lettersSubmit(sq);
                     break;
@@ -750,7 +772,7 @@ public class KudosudokuModule : MonoBehaviour
                     string.Format("{0}.{1}", orientationNames[leftExpect], orientationNames[rightExpect]));
             }
 
-            slidePanel(TopPanelCover.transform, 0, 0, -7, 0, TopPanelBacking.transform, SemaphoresPanel.transform, open: false);
+            _panelAnimationQueue.Enqueue(new PanelAnimationInfo(TopPanelCover.transform, 0, 0, -7, 0, TopPanelBacking.transform, SemaphoresPanel.transform, open: false));
             _activeSquare = null;
             Squares[sq].OnInteract = squarePress(sq);
             return false;
@@ -785,7 +807,7 @@ public class KudosudokuModule : MonoBehaviour
             else
                 strikeAndReshuffle(sq, string.Format("Binary {0}", provided), expected);
 
-            slidePanel(TopPanelCover.transform, 0, 0, -7, 0, TopPanelBacking.transform, BinaryPanel.transform, open: false);
+            _panelAnimationQueue.Enqueue(new PanelAnimationInfo(TopPanelCover.transform, 0, 0, -7, 0, TopPanelBacking.transform, BinaryPanel.transform, open: false));
             _activeSquare = null;
             Squares[sq].OnInteract = squarePress(sq);
             return false;
@@ -820,7 +842,7 @@ public class KudosudokuModule : MonoBehaviour
             else
                 strikeAndReshuffle(sq, string.Format("Braille {0}", provided), expected);
 
-            slidePanel(RightPanelCover.transform, -7, 0, 0, 0, RightPanelBacking.transform, BraillePanel.transform, open: false);
+            _panelAnimationQueue.Enqueue(new PanelAnimationInfo(RightPanelCover.transform, -7, 0, 0, 0, RightPanelBacking.transform, BraillePanel.transform, open: false));
             _activeSquare = null;
             Squares[sq].OnInteract = squarePress(sq);
             return false;
@@ -852,7 +874,7 @@ public class KudosudokuModule : MonoBehaviour
             else
                 strikeAndReshuffle(sq, string.Format("Letter {0}", _curLetter), _numberNames[_solution[sq]].ToString());
 
-            slidePanel(RightPanelCover.transform, -7, 0, 0, 0, RightPanelBacking.transform, LettersPanel.transform, open: false);
+            _panelAnimationQueue.Enqueue(new PanelAnimationInfo(RightPanelCover.transform, -7, 0, 0, 0, RightPanelBacking.transform, LettersPanel.transform, open: false));
             _activeSquare = null;
             Squares[sq].OnInteract = squarePress(sq);
             return false;
@@ -861,14 +883,9 @@ public class KudosudokuModule : MonoBehaviour
 
     // ** ANIMATION/SOUND COROUTINES ** //
 
-    private void slidePanel(Transform cover, int x1, int x2, int z1, int z2, Transform backing, Transform panel, bool open)
-    {
-        StartCoroutine(slidePanelCover(cover, x1, x2, z1, z2, open));
-        StartCoroutine(slidePanelPanel(backing, panel, open));
-    }
-
     private IEnumerator slidePanelPanel(Transform backing, Transform panel, bool open)
     {
+        _activePanelAnimations++;
         yield return null;
         backing.localPosition = new Vector3(0, open ? -1 : 0, 0);
         panel.localPosition = new Vector3(0, open ? -1 : 0, 0);
@@ -894,10 +911,12 @@ public class KudosudokuModule : MonoBehaviour
             backing.gameObject.SetActive(false);
             panel.gameObject.SetActive(false);
         }
+        _activePanelAnimations--;
     }
 
     private IEnumerator slidePanelCover(Transform cover, int x1, int x2, int z1, int z2, bool open)
     {
+        _activePanelAnimations++;
         if (!open)
             yield return new WaitForSeconds(.25f);
         Audio.PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.WireSequenceMechanism, cover);
@@ -909,6 +928,21 @@ public class KudosudokuModule : MonoBehaviour
             elapsed += Time.deltaTime;
             cover.localPosition = new Vector3(easeInOutQuad(Mathf.Min(elapsed, durCover), x1, x2, durCover), 0, easeInOutQuad(Mathf.Min(elapsed, durCover), z1, z2, durCover));
             yield return null;
+        }
+        _activePanelAnimations--;
+    }
+
+    private IEnumerator processPanelAnimationQueue()
+    {
+        yield return null;
+
+        while (true)
+        {
+            yield return new WaitUntil(() => _panelAnimationQueue.Count > 0);
+            var element = _panelAnimationQueue.Dequeue();
+            StartCoroutine(slidePanelCover(element.Cover, element.X1, element.X2, element.Z1, element.Z2, element.Open));
+            StartCoroutine(slidePanelPanel(element.Backing, element.Panel, element.Open));
+            yield return new WaitUntil(() => _activePanelAnimations == 0);
         }
     }
 
