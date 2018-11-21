@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 11489324}
   - component: {fileID: 11496072}
   - component: {fileID: 11489182}
+  - component: {fileID: 114885490841869814}
   m_Layer: 0
   m_Name: KudosudokuModule
   m_TagString: Untagged
@@ -292,6 +293,7 @@ MonoBehaviour:
   Bomb: {fileID: 11489324}
   Module: {fileID: 11429752}
   Audio: {fileID: 11496072}
+  ColorblindMode: {fileID: 114885490841869814}
   SquaresParent: {fileID: 1373397744202480}
   Squares:
   - {fileID: 114712161020642910}
@@ -315,6 +317,11 @@ MonoBehaviour:
   - {fileID: 2800000, guid: f329c13abd71452499a56345a077c4cc, type: 3}
   - {fileID: 2800000, guid: 4c01969e55220f442b8ba0b8eed64e0b, type: 3}
   - {fileID: 2800000, guid: 8ef2c50e179345e4b90930c4c65f9fab, type: 3}
+  SnookerBallTexturesCB:
+  - {fileID: 2800000, guid: b11a225fe6681bd47a745d64cd6025b0, type: 3}
+  - {fileID: 2800000, guid: 5880f85a447a4e0469a18234cb90869f, type: 3}
+  - {fileID: 2800000, guid: 9c646d8e206a07c42bd0b976f39995a5, type: 3}
+  - {fileID: 2800000, guid: 8125f8be1e45bd64d91759aea84c0f4d, type: 3}
   AstrologyTextures:
   - {fileID: 2800000, guid: 5549d15a2a0028b47b0f939a3dd0d94a, type: 3}
   - {fileID: 2800000, guid: e90579a4f54266442b72d5d0635febbc, type: 3}
@@ -5330,7 +5337,7 @@ MeshRenderer:
   m_LightProbeUsage: 1
   m_ReflectionProbeUsage: 1
   m_Materials:
-  - {fileID: 2100000, guid: e7faaed3879f99a4c9158cab2de4adfb, type: 2}
+  - {fileID: 2100000, guid: 1015fc75eac34464584a508aea957ef2, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -7895,7 +7902,7 @@ TextMesh:
   m_Text: T
   m_OffsetZ: 0
   m_CharacterSize: 1
-  m_LineSpacing: 1
+  m_LineSpacing: 0.7
   m_Anchor: 4
   m_Alignment: 1
   m_TabSize: 4
@@ -9870,6 +9877,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   ShaderNames:
   - KT/Mobile/DiffuseTint
+--- !u!114 &114885490841869814
+MonoBehaviour:
+  m_ObjectHideFlags: 1
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 127088}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c1cfb889a07d5fd4e9baed7960bb397f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _colorblindMode: 0
 --- !u!114 &114891205579062368
 MonoBehaviour:
   m_ObjectHideFlags: 1

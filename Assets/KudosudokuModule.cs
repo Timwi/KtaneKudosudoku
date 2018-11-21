@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using KModkit;
 using Kudosudoku;
 using UnityEngine;
@@ -13,11 +14,13 @@ public class KudosudokuModule : MonoBehaviour
     public KMBombInfo Bomb;
     public KMBombModule Module;
     public KMAudio Audio;
+    public KMColorblindMode ColorblindMode;
     public GameObject SquaresParent;
 
     public KMSelectable[] Squares;
 
     public Texture[] SnookerBallTextures;
+    public Texture[] SnookerBallTexturesCB;
     public Texture[] AstrologyTextures;
     public Texture[] CardSuitTextures;
     public Texture[] MahjongTextures;
@@ -97,11 +100,15 @@ public class KudosudokuModule : MonoBehaviour
     private int[] _solution;
     private bool _isSolved;
     private Coding[] _codings;
+    private bool _colorblind;
 
-    /// <summary>
-    ///     Which squares currently have a panel open OR active Morse or Tap Code.</summary>
-    /// <remarks>
-    ///     While this is non-null, all other unsolved squares give a strike.</remarks>
+    // Used both for colorblind mode (dark red/blue expecting Morse/Tap Code) and for TP (S1–S4 for sounds)
+    private TextMesh _extraText;
+
+    // Used to swap out the texture if color-blind mode is enabled when it’s already visible
+    private MeshRenderer _snookerBallGraphic;
+
+    /// <summary>Which square currently has a panel open, a cycling graphic or sound, or active Morse or Tap Code.</summary>
     private int? _activeSquare = null;
 
     /// <summary>Lists all the times at which the mouse was pressed or released while entering Morse code.</summary>
@@ -118,10 +125,13 @@ public class KudosudokuModule : MonoBehaviour
     private bool _leftSemaphoreCw = true;
     private bool _rightSemaphoreCw = false;
     private Coroutine _semaphoreAnimation = null;
+
     private bool[] _curBinary = new bool[5];
     private bool[] _curBraille = new bool[6];
     private char _curLetter = 'A';
     private float _curArrowRotation = 0;
+    private char _morseCharacterToBlink;
+    private Coroutine _morseBlinking = null;
     private Coroutine _morseWrong = null;
 
     private readonly char[] _numberNames = new char[4];
@@ -151,6 +161,7 @@ public class KudosudokuModule : MonoBehaviour
         _isSolved = false;
         _squaresMR = new MeshRenderer[16];
         _brailleDotsMR = new MeshRenderer[6];
+        _colorblind = ColorblindMode.ColorblindModeActive;
 
         LetterTextMesh.gameObject.SetActive(false);
         DigitTextMesh.gameObject.SetActive(false);
@@ -241,6 +252,20 @@ public class KudosudokuModule : MonoBehaviour
 
         foreach (var ix in givens)
             showSquare(ix, initial: true);
+    }
+
+    private void setTpCbText(int sq, string text, int fontSize)
+    {
+        if (_extraText == null)
+        {
+            _extraText = Instantiate(LetterTextMesh);
+            _extraText.name = "TpCbText";
+            _extraText.color = Color.white;
+        }
+        _extraText.text = text;
+        _extraText.fontSize = fontSize;
+        reparentAndActivate(_extraText.transform, Squares[sq].transform);
+        _extraText.transform.localPosition = new Vector3(0, -.04f, -.0001f);
     }
 
     private void showSquare(int sq, bool initial)
@@ -334,8 +359,8 @@ public class KudosudokuModule : MonoBehaviour
                 // Usually we’ll blink the letter, but:
                 //  • If Morse Code is an initial given, it has a 1-in-3 chance of blinking the digit 1–4 instead.
                 //  • If Morse Code is an initial given, would have to blink E or T, and both E and T are number names, definitely blink the digit instead
-                var characterToBlink = initial && (Rnd.Range(0, 3) == 0 || (_numberNames.Contains('E') && _numberNames.Contains('T') && "ET".Contains(_numberNames[_solution[sq]]))) ? (char) (_solution[sq] + '1') : _numberNames[_solution[sq]];
-                StartCoroutine(blinkMorse(characterToBlink));
+                _morseCharacterToBlink = initial && (Rnd.Range(0, 3) == 0 || (_numberNames.Contains('E') && _numberNames.Contains('T') && "ET".Contains(_numberNames[_solution[sq]]))) ? (char) (_solution[sq] + '1') : _numberNames[_solution[sq]];
+                _morseBlinking = StartCoroutine(blinkMorse());
                 break;
             }
 
@@ -356,12 +381,14 @@ public class KudosudokuModule : MonoBehaviour
             default:
             {
                 var textures =
-                    _codings[sq] == Coding.Snooker ? SnookerBallTextures :
+                    _codings[sq] == Coding.Snooker ? (_colorblind ? SnookerBallTexturesCB : SnookerBallTextures) :
                     _codings[sq] == Coding.Astrology ? AstrologyTextures :
                     _codings[sq] == Coding.Mahjong ? MahjongTextures :
                     _codings[sq] == Coding.CardSuits ? CardSuitTextures : null;
                 var mr = createGraphic(square, 1);
                 mr.material.mainTexture = textures[_solution[sq]];
+                if (_codings[sq] == Coding.Snooker)
+                    _snookerBallGraphic = mr;
                 break;
             }
         }
@@ -375,14 +402,6 @@ public class KudosudokuModule : MonoBehaviour
         {
             if (_isSolved)
                 return false;
-
-            if (_activeSquare != null && _activeSquare.Value != sq)
-            {
-                Module.HandleStrike();
-                Debug.LogFormat(@"[Kudosudoku #{0}] You received a strike because you pressed on square {1}{2} while square {3}{4} was still waiting for {5} input.",
-                    _moduleId, (char) ('A' + sq % 4), (char) ('1' + sq / 4), (char) ('A' + _activeSquare.Value % 4), (char) ('1' + _activeSquare.Value / 4), _codings[_activeSquare.Value]);
-                return false;
-            }
 
             if (_shown[sq])
             {
@@ -400,7 +419,27 @@ public class KudosudokuModule : MonoBehaviour
                     case Coding.ListeningSounds:
                         playListeningSound(_listeningAlternatives[_solution[sq]], Squares[sq].transform);
                         break;
+
+                    // Allow turning Morse Code on and off
+                    case Coding.MorseCode:
+                        if (_morseBlinking != null)
+                        {
+                            StopCoroutine(_morseBlinking);
+                            _morseBlinking = null;
+                            MorseLed.material = MorseLedOff;
+                        }
+                        else
+                            _morseBlinking = StartCoroutine(blinkMorse());
+                        break;
                 }
+                return false;
+            }
+
+            if (_activeSquare != null && _activeSquare.Value != sq)
+            {
+                Module.HandleStrike();
+                Debug.LogFormat(@"[Kudosudoku #{0}] You received a strike because you pressed on unsolved square {1}{2} while square {3}{4} was still waiting for {5} input.",
+                    _moduleId, (char) ('A' + sq % 4), (char) ('1' + sq / 4), (char) ('A' + _activeSquare.Value % 4), (char) ('1' + _activeSquare.Value / 4), _codings[_activeSquare.Value]);
                 return false;
             }
 
@@ -412,6 +451,7 @@ public class KudosudokuModule : MonoBehaviour
                     // Upon the first click, the square turns “dark red”
                     _squaresMR[sq].material = SquareExpectingMorse;
                     _morsePressTimes = new List<float>();
+                    setMorseColorblindText(sq);
 
                     // Henceforth, the square expects Morse code input
                     Squares[sq].OnInteract = morseMouseDown(sq);
@@ -423,6 +463,7 @@ public class KudosudokuModule : MonoBehaviour
                     // Upon the first click, the square turns “blue”
                     _squaresMR[sq].material = SquareExpectingTapCode;
                     _tapCodeInput = new List<int>();
+                    setTapCodeColorblindText(sq);
 
                     // Henceforth, the square expects Tap Code input
                     Squares[sq].OnInteract = tapCodeMouseDown(sq);
@@ -448,27 +489,27 @@ public class KudosudokuModule : MonoBehaviour
                     {
                         Audio.PlaySoundAtTransform("Selection", Squares[sq].transform);
                         DigitTextMesh.text = (i + 1).ToString();
-                    }, () => { DigitTextMesh.gameObject.SetActive(false); }, "Digit", new[] { "1", "2", "3", "4" }, 2f);
+                    }, () => { DigitTextMesh.gameObject.SetActive(false); }, "Digit", 2f, new[] { "1", "2", "3", "4" }, new[] { "1", "2", "3", "4" });
                     break;
 
                 case Coding.MaritimeFlags:
-                    startGraphicsCycle(sq, 1, _numberNames.Select(ch => "Flag-" + ch).Select(name => MaritimeFlagTextures.First(t => t.name == name)).ToArray(), "maritime flag", _numberNames.Select(ch => ch.ToString()).ToArray(), 2f);
+                    startGraphicsCycle(sq, 1, _numberNames.Select(ch => "Flag-" + ch).Select(name => MaritimeFlagTextures.First(t => t.name == name)).ToArray(), "maritime flag", 2f, _numberNames.Select(ch => ch.ToString()).ToArray(), _numberNames.Select(ch => _tpMaritimeFlagNames[ch - 'A']).ToArray());
                     break;
 
                 case Coding.Astrology:
-                    startGraphicsCycle(sq, 1, AstrologyTextures, "astrological symbol", new[] { "Fire", "Water", "Earth", "Air" }, 2f);
+                    startGraphicsCycle(sq, 1, AstrologyTextures, "astrological symbol", 2f, new[] { "fire", "water", "earth", "air" });
                     break;
 
                 case Coding.Snooker:
-                    startGraphicsCycle(sq, 1, SnookerBallTextures, "Snooker ball", new[] { "Red", "Yellow", "Green", "Brown" }, 2f);
+                    startGraphicsCycle(sq, 1, SnookerBallTextures, "Snooker ball", 2f, new[] { "red", "yellow", "green", "brown" }, cbTextures: SnookerBallTexturesCB);
                     break;
 
                 case Coding.CardSuits:
-                    startGraphicsCycle(sq, 1, CardSuitTextures, "card suit", new[] { "spades", "hearts", "clubs", "diamonds" }, 2f);
+                    startGraphicsCycle(sq, 1, CardSuitTextures, "card suit", 2f, new[] { "spades", "hearts", "clubs", "diamonds" });
                     break;
 
                 case Coding.Mahjong:
-                    startGraphicsCycle(sq, 1, MahjongTextures, "Mahjong tile", new[] { "plum", "orchid", "chrysanthemum", "bamboo" }, 2f);
+                    startGraphicsCycle(sq, 1, MahjongTextures, "Mahjong tile", 2f, new[] { "plum", "orchid", "chrysanthemum", "bamboo" });
                     break;
 
                 case Coding.TheCubeSymbols:
@@ -477,15 +518,15 @@ public class KudosudokuModule : MonoBehaviour
                     {
                         Audio.PlaySoundAtTransform("Selection", Squares[sq].transform);
                         TheCubeSymbolsTextMesh.text = _theCubeAlternatives[i].ToString();
-                    }, () => { TheCubeSymbolsTextMesh.gameObject.SetActive(false); }, "The Cube symbol", _theCubeAlternatives.Select(ch => ch.ToString()).ToArray(), 2f);
+                    }, () => { TheCubeSymbolsTextMesh.gameObject.SetActive(false); }, "The Cube symbol", 2f, _theCubeAlternatives.Select(ch => ch.ToString()).ToArray(), _theCubeAlternatives.Select(ch => _tpTheCubeSymbolNames[ch - 'A']).ToArray());
                     break;
 
                 case Coding.SimonSamples:
-                    startCycle(sq, i => { Audio.PlaySoundAtTransform(_simonSamplesSounds[i], Squares[sq].transform); }, null, "Simon Samples sample", _simonSamplesSounds, 2f);
+                    startCycle(sq, i => { Audio.PlaySoundAtTransform(_simonSamplesSounds[i], Squares[sq].transform); }, null, "Simon Samples sample", 2f, _simonSamplesSounds, tpVisibleNames: true);
                     break;
 
                 case Coding.ListeningSounds:
-                    startCycle(sq, i => { playListeningSound(_listeningAlternatives[i], Squares[sq].transform); }, null, "Listening sound", _listeningAlternatives, 6.55f);
+                    startCycle(sq, i => { playListeningSound(_listeningAlternatives[i], Squares[sq].transform); }, null, "Listening sound", 6.55f, _listeningAlternatives, tpVisibleNames: true);
                     break;
 
                 case Coding.Arrows:
@@ -506,10 +547,26 @@ public class KudosudokuModule : MonoBehaviour
         };
     }
 
+    private void setMorseColorblindText(int sq)
+    {
+        if (_colorblind)
+            setTpCbText(sq, "dark\nred", 48);
+    }
+
+    private void setTapCodeColorblindText(int sq)
+    {
+        if (_colorblind)
+            setTpCbText(sq, "blue", 48);
+    }
+
     private KMSelectable.OnInteractHandler morseMouseDown(int sq)
     {
         return delegate
         {
+            // Disappear color-blind text
+            if (_extraText != null)
+                _extraText.gameObject.SetActive(false);
+
             // Check if mouse is already down. This should never happen.
             if (_morsePressTimes.Count % 2 == 1)
                 return false;
@@ -594,6 +651,10 @@ public class KudosudokuModule : MonoBehaviour
         Coroutine coroutine = null;
         return delegate
         {
+            // Disappear color-blind text
+            if (_extraText != null)
+                _extraText.gameObject.SetActive(false);
+
             if (_tapCodeLastCodeStillActive)
                 _tapCodeInput[_tapCodeInput.Count - 1]++;
             else
@@ -882,9 +943,10 @@ public class KudosudokuModule : MonoBehaviour
         }
     }
 
-    private IEnumerator blinkMorse(char ch)
+    private IEnumerator blinkMorse()
     {
-        var morse = _morseCode[ch];
+        yield return new WaitForSeconds(.25f);
+        var morse = _morseCode[_morseCharacterToBlink];
         const float dotLength = .3f;
         while (true)
         {
@@ -953,40 +1015,52 @@ public class KudosudokuModule : MonoBehaviour
 
     // ** CYCLES (graphics, sounds) ** //
 
-    private void startCycle(int sq, Action<int> showOption, Action cleanUp, string codingName, string[] answerNames, float submissionDelay)
+    private void startCycle(int sq, Action<int> showOption, Action cleanUp, string codingName, float submissionDelay, string[] answerNames, string[] tpAnswerNames = null, bool tpVisibleNames = false)
     {
         _squaresMR[sq].material = SquareExpectingAnswer;
         var cycle = Enumerable.Range(0, 4).ToArray().Shuffle();
         showOption(cycle[0]);
         var ix = 0;
         var coroutine = StartCoroutine(submitAfterDelay(sq, submissionDelay, cycle[0], codingName, answerNames, cleanUp));
+        if (tpAnswerNames == null)
+        {
+            tpAnswerNames = new string[4];
+            for (int i = 0; i < 4; i++)
+                tpAnswerNames[cycle[i]] = "S" + (i + 1);
+        }
+        _tpCyclingNames = cycle.Select(c => tpAnswerNames[c]).ToArray();
+        if (TwitchPlaysActive && tpVisibleNames)
+            setTpCbText(sq, tpAnswerNames[cycle[0]], 64);
 
         Squares[sq].OnInteract = delegate
         {
             if (coroutine != null)
                 StopCoroutine(coroutine);
             ix = (ix + 1) % 4;
+            if (TwitchPlaysActive && tpVisibleNames)
+                setTpCbText(sq, tpAnswerNames[cycle[ix]], 64);
+            _tpCyclingName = tpAnswerNames[cycle[ix]];
             showOption(cycle[ix]);
             coroutine = StartCoroutine(submitAfterDelay(sq, submissionDelay, cycle[ix], codingName, answerNames, cleanUp));
             return false;
         };
     }
 
-    private void startGraphicsCycle(int sq, float widthRatio, Texture[] textures, string codingName, string[] answerNames, float submissionDelay)
+    private void startGraphicsCycle(int sq, float widthRatio, Texture[] textures, string codingName, float submissionDelay, string[] answerNames, string[] tpAnswerNames = null, Texture[] cbTextures = null)
     {
         var gr = createGraphic(Squares[sq].transform, widthRatio);
         startCycle(sq,
             i =>
             {
                 Audio.PlaySoundAtTransform("Selection", Squares[sq].transform);
-                gr.material.mainTexture = textures[i];
+                gr.material.mainTexture = _colorblind && cbTextures != null ? cbTextures[i] : textures[i];
             },
             () =>
             {
                 gr.gameObject.SetActive(false);
                 _unusedImageObjects.Push(gr.gameObject);
             },
-            codingName, answerNames, submissionDelay);
+            codingName, submissionDelay, answerNames, tpAnswerNames ?? answerNames);
     }
 
     private IEnumerator submitAfterDelay(int sq, float submissionDelay, int answer, string codingName, string[] answerNames, Action cleanUp)
@@ -995,6 +1069,7 @@ public class KudosudokuModule : MonoBehaviour
         if (cleanUp != null)
             cleanUp();
         submitAnswer(sq, answer, codingName + " " + answerNames[answer], answerNames[_solution[sq]]);
+        _tpCyclingNames = null;
     }
 
     // ** OTHER FUNCTIONS ** //
@@ -1007,6 +1082,8 @@ public class KudosudokuModule : MonoBehaviour
             strikeAndReshuffle(sq, whatEntered, expected);
         _activeSquare = null;
         Squares[sq].OnInteract = squarePress(sq);
+        if (_extraText != null)
+            _extraText.gameObject.SetActive(false);
     }
 
     private void strikeAndReshuffle(int sq, string whatEntered, string expected)
@@ -1066,5 +1143,273 @@ public class KudosudokuModule : MonoBehaviour
     {
         t /= duration;
         return (end - start) * t * t + start;
+    }
+
+    // ** TWITCH PLAYS ** //
+
+    private static readonly string[] _tpMaritimeFlagNames = new[] {
+        // We only need the letters A-Z for submitting an answer in TP.
+        "white-blue with cutout",
+        "red with cutout",
+        "blue-white-red-white-blue horizontal",
+        "yellow-blue-yellow horizontal",
+        "blue-red horizontal",
+        "red diamond on white",
+        "yellow-blue vertical stripes",
+        "white-red vertical",
+        "black dot on yellow",
+        "blue-white-blue horizontal",
+        "yellow-blue vertical",
+        "yellow-black checkerboard",
+        "white saltire on blue",
+        "blue-white checkerboard",
+        "yellow-red diagonal",
+        "white square on blue",
+        "yellow",
+        "yellow cross on red",
+        "blue square on white",
+        "red-white-blue vertical",
+        "red-white checkerboard",
+        "red saltire on white",
+        "red square on white square on blue",
+        "blue cross on white",
+        "yellow-red diagonal stripes",
+        "yellow-blue-red-black diagonal quadrants"
+    };
+
+    private static readonly string[] _tpTheCubeSymbolNames = new[] { "Tunnel", "Doll", "Pluto", "Squeeze", null, null, null, null, null, null, "Stonehenge", "Vortex", "Ribbon", "Meteor" };
+    private string[] _tpCyclingNames;
+    private string _tpCyclingName;
+    private Coroutine _tpRepeatedlyClicking;
+
+#pragma warning disable 414
+    private readonly string TwitchHelpMessage = @"!{0} A1 [tap on a square] | !{0} names [show names for answers currently cycling] | !{0} S1 [stop cycling at answer with that name] | !{0} -.- [Morse code] | !{0} 13 [Tap Code or Braille] | !{0} SW.N [Semaphore (cardinals)] | !{0} 8.12 [Semaphore (clockface)] | !{0} DL U [Semaphore (directions)] | !{0} 01011 [Binary] | !{0} K [Letters] | All code submissions can be prepended by “submit” | !{0} colorblind";
+    private bool TwitchPlaysActive = false;
+#pragma warning restore 414
+
+    public IEnumerator ProcessTwitchCommand(string command)
+    {
+        TwitchPlaysActive = true;
+
+        Match m;
+
+        if (command.Trim().Equals("colorblind", StringComparison.InvariantCultureIgnoreCase))
+        {
+            _colorblind = true;
+
+            // Show color-blind text if a square is currently waiting for Morse Code or Tap Code
+            if (_activeSquare != null && _codings[_activeSquare.Value] == Coding.MorseCode)
+                setMorseColorblindText(_activeSquare.Value);
+            if (_activeSquare != null && _codings[_activeSquare.Value] == Coding.TapCode)
+                setTapCodeColorblindText(_activeSquare.Value);
+
+            // Switch the texture for any already-visible Snooker balls (“initial: true” prevents an extraneous “square was correct!” log message)
+            if (_snookerBallGraphic != null)
+                _snookerBallGraphic.material.mainTexture = SnookerBallTexturesCB[_solution[Array.IndexOf(_codings, Coding.Snooker)]];
+            yield return null;
+        }
+        else if ((m = Regex.Match(command, @"^\s*(?:(?:tap|click|press)\s+)?([A-D])\s*([1-4])\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).Success)
+        {
+            yield return null;
+            var coord = (char.ToUpperInvariant(m.Groups[1].Value[0]) - 'A') + 4 * (m.Groups[2].Value[0] - '1');
+            var wasShown = _shown[coord];
+
+            // Tap the square
+            yield return new[] { Squares[coord] };
+
+            // If that didn’t give a strike, and the square isn’t already prefilled, the square opened up. If it is one of the “submission timeout” squares, we need to repeatedly press it to avoid submitting;
+            // however, if we’re already doing that right now and the user just tapped the same square again, then don’t start a second copy of the subroutine
+            if (!wasShown && _tpRepeatedlyClicking == null)
+            {
+                switch (_codings[coord])
+                {
+                    case Coding.Digits:
+                    case Coding.MaritimeFlags:
+                    case Coding.SimonSamples:
+                    case Coding.Astrology:
+                    case Coding.Snooker:
+                    case Coding.CardSuits:
+                    case Coding.Mahjong:
+                    case Coding.TheCubeSymbols:
+                        _tpRepeatedlyClicking = StartCoroutine(tpRepeatedlyClick(1.25f, Squares[coord]));
+                        break;
+
+                    case Coding.ListeningSounds:
+                        _tpRepeatedlyClicking = StartCoroutine(tpRepeatedlyClick(4.9f, Squares[coord]));
+                        break;
+                }
+            }
+        }
+        else if ((m = Regex.Match(command, @"^\s*(?:show\s*)?names\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).Success)
+        {
+            if (_activeSquare == null)
+            {
+                yield return "sendtochaterror No square is currently active.";
+                yield break;
+            }
+            switch (_codings[_activeSquare.Value])
+            {
+                case Coding.Digits:
+                case Coding.MaritimeFlags:
+                case Coding.Astrology:
+                case Coding.Snooker:
+                case Coding.CardSuits:
+                case Coding.Mahjong:
+                case Coding.TheCubeSymbols:
+                    yield return string.Format("sendtochat The names are {0}.", Enumerable.Range(0, 4).Select(i => string.Format("“{0}”", _tpCyclingNames[i])).JoinString(", "));
+                    yield break;
+
+                case Coding.SimonSamples:
+                case Coding.ListeningSounds:
+                    yield return "sendtochat Use the names shown in the square.";
+                    yield break;
+
+                case Coding.Arrows:
+                    yield return "sendtochat You can use up/down/left/right or north/south/west/east or clockface directions.";
+                    yield break;
+
+                default:
+                    yield return "sendtochaterror That is not the correct command for submitting an answer to this square.";
+                    yield break;
+            }
+        }
+        else if (_activeSquare != null && _tpCyclingNames != null &&
+            (((m = Regex.Match(command, @"^\s*(?:stop at|stop on)\s+(.*?)\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).Success
+                && _tpCyclingNames.Any(tn => tn.Equals(m.Groups[1].Value, StringComparison.InvariantCultureIgnoreCase)))
+            || _tpCyclingNames.Any(tn => tn.Equals(command.Trim(), StringComparison.InvariantCultureIgnoreCase))))
+        {
+            var value = m.Success ? m.Groups[1].Value : command.Trim();
+
+            switch (_codings[_activeSquare.Value])
+            {
+                case Coding.Digits:
+                case Coding.MaritimeFlags:
+                case Coding.SimonSamples:
+                case Coding.Astrology:
+                case Coding.Snooker:
+                case Coding.CardSuits:
+                case Coding.Mahjong:
+                case Coding.TheCubeSymbols:
+                case Coding.ListeningSounds:
+                    if (!_tpCyclingNames.Any(cn => cn.Equals(value, StringComparison.InvariantCultureIgnoreCase)))
+                        yield return "sendtochaterror I don’t recognize that name.";
+                    else
+                    {
+                        if (_tpRepeatedlyClicking == null)
+                        {
+                            yield return "sendtochat @{0} Please report this bug to Timwi: “delayed-submission coroutine wasn’t active”. Send along the bomb’s logfile.";
+                            yield break;
+                        }
+                        yield return null;
+                        StopCoroutine(_tpRepeatedlyClicking);
+                        _tpRepeatedlyClicking = null;
+                        while (!_tpCyclingName.Equals(value, StringComparison.InvariantCultureIgnoreCase))
+                        {
+                            yield return new[] { Squares[_activeSquare.Value] };
+                            yield return new WaitForSeconds(.5f);
+                            yield return "trycancel";
+                        }
+                    }
+                    yield break;
+
+                case Coding.Arrows:
+                    var acceptableNames = "up=2/down=0/left=1/right=3/u=2/d=0/l=1/r=3/top=2/bottom=0/t=2/b=0/north=2/south=0/west=1/east=3/n=2/s=0/w=1/e=3/12=2/3=3/6=0/9=1"
+                        .Split('/').Select(str => str.Split('=')).ToDictionary(arr => arr[0], arr => int.Parse(arr[1]), StringComparer.InvariantCultureIgnoreCase);
+                    int desiredDirection;
+                    if (!acceptableNames.TryGetValue(m.Groups[1].Value, out desiredDirection))
+                    {
+                        yield return "sendtochaterror I don’t recognize that direction. And that despite the fact that I’m pretty lenient! I accept up/down/top/bottom/left/right, north/south/west/east, and even clockface directions.";
+                        yield break;
+                    }
+
+                    yield return null;
+                    yield return new WaitUntil(() => (_curArrowRotation % 90 < 30 || _curArrowRotation % 90 > 60) && (_curArrowRotation < 45 ? 3 : _curArrowRotation < 135 ? 2 : _curArrowRotation < 225 ? 1 : _curArrowRotation < 315 ? 0 : 3) == desiredDirection);
+                    yield return new[] { Squares[_activeSquare.Value] };
+                    yield break;
+
+                default:
+                    yield return "sendtochaterror That is not the correct command for submitting an answer to this square.";
+                    yield break;
+            }
+        }
+        else if (_activeSquare != null && _codings[_activeSquare.Value] == Coding.MorseCode && (m = Regex.Match(command, @"^\s*(?:(?:morse|tx|transmit|send|submit|enter|input|play)\s+)?([-.]+)\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).Success)
+        {
+            yield return null;
+            var morse = m.Groups[1].Value;
+            var sq = Squares[_activeSquare.Value];
+            for (int i = 0; i < morse.Length; i++)
+            {
+                sq.OnInteract();
+                yield return new WaitForSeconds(morse[i] == '.' ? .25f : .75f);
+                sq.OnInteractEnded();
+                yield return new WaitForSeconds(.25f);
+            }
+        }
+        else if (_activeSquare != null && _codings[_activeSquare.Value] == Coding.TapCode && (m = Regex.Match(command, @"^\s*(?:(?:tap|send|transmit|play|submit|enter|input)\s+)?([1-5][1-5])\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).Success)
+        {
+            yield return null;
+            var tapCode = m.Groups[1].Value;
+            var sq = Squares[_activeSquare.Value];
+            yield return Enumerable.Repeat(sq, tapCode[0] - '0');
+            yield return new WaitForSeconds(1.1f);
+            yield return Enumerable.Repeat(sq, tapCode[1] - '0');
+        }
+        else if (_activeSquare != null && _codings[_activeSquare.Value] == Coding.Semaphores && (m = Regex.Match(command, @"^\s*(?:(?:flags?|semaphores?|submit|enter|input)\s+)?(?:(?<l0>n|north|12|u|up)|(?<l_45>ne|north-?east|2|ur|up-?right)|(?<l225>se|south-?east|4|dr|down-?right)|(?<l180>s|south|6|d|down)|(?<l135>sw|south-?west|8|dl|down-?left)|(?<l90>w|west|9|l|left)|(?<l45>nw|north-?west|10|ul|up-?left))[-\.,; ]+(?:(?<r0>n|north|12|u|up)|(?<r_45>ne|north-?east|2|ur|up-?right)|(?<r_90>e|east|3|r|right)|(?<r_135>se|south-?east|4|dr|down-?right)|(?<r_180>s|south|6|d|down)|(?<r_225>sw|south-?west|8|dl|down-?left)|(?<r45>nw|north-?west|10|ul|up-?left))\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).Success)
+        {
+            yield return null;
+            while (!m.Groups[("l" + _leftSemaphore).Replace("-", "_")].Success)
+            {
+                yield return new[] { SemaphoresLeftSelectable };
+                yield return "trycancel";
+            }
+            while (!m.Groups[("r" + _rightSemaphore).Replace("-", "_")].Success)
+            {
+                yield return new[] { SemaphoresRightSelectable };
+                yield return "trycancel";
+            }
+            yield return new[] { Squares[_activeSquare.Value] };
+        }
+        else if (_activeSquare != null && _codings[_activeSquare.Value] == Coding.Binary && (m = Regex.Match(command, @"^\s*(?:(?:binary|bin|digits|submit|enter|input)\s+)?([01]{5})\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).Success)
+        {
+            yield return null;
+            for (int i = 0; i < 5; i++)
+            {
+                if (_curBinary[i] != (m.Groups[1].Value[i] == '1'))
+                    yield return new[] { BinaryDigits[i] };
+                yield return "trycancel";
+            }
+            yield return new[] { Squares[_activeSquare.Value] };
+        }
+        else if (_activeSquare != null && _codings[_activeSquare.Value] == Coding.Letters && (m = Regex.Match(command, @"^\s*(?:(?:letters?|submit|enter|input)\s+)?([A-Z])\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).Success)
+        {
+            yield return null;
+            while (!_curLetter.ToString().Equals(m.Groups[1].Value, StringComparison.InvariantCultureIgnoreCase))
+            {
+                yield return new[] { LetterUpDownButtons[2] };
+                yield return "trycancel";
+            }
+            yield return new[] { Squares[_activeSquare.Value] };
+        }
+        else if (_activeSquare != null && _codings[_activeSquare.Value] == Coding.Braille && (m = Regex.Match(command, @"^\s*(?:(?:braille|dots|submit|enter|input)\s+)?(?=[1-6])(1?2?3?4?5?6?)\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).Success)
+        {
+            yield return null;
+            for (int i = 0; i < 6; i++)
+            {
+                if (_curBraille[i] != m.Groups[1].Value.Contains((char) ('1' + i)))
+                    yield return new[] { BrailleDots[i] };
+                yield return "trycancel";
+            }
+            yield return new[] { Squares[_activeSquare.Value] };
+        }
+    }
+
+    private IEnumerator tpRepeatedlyClick(float delay, KMSelectable button)
+    {
+        yield return new WaitForSeconds(delay - .1f);
+        while (true)
+        {
+            button.OnInteract();
+            yield return new WaitForSeconds(delay);
+        }
     }
 }
