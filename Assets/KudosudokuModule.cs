@@ -1190,6 +1190,7 @@ public class KudosudokuModule : MonoBehaviour
     public IEnumerator ProcessTwitchCommand(string command)
     {
         TwitchPlaysActive = true;
+        Debug.LogFormat(@"<Kudosudoku #{0}> TP: {1}", _moduleId, command);
 
         Match m;
 
@@ -1312,25 +1313,23 @@ public class KudosudokuModule : MonoBehaviour
                     }
                     yield break;
 
-                case Coding.Arrows:
-                    var acceptableNames = "up=2/down=0/left=1/right=3/u=2/d=0/l=1/r=3/top=2/bottom=0/t=2/b=0/north=2/south=0/west=1/east=3/n=2/s=0/w=1/e=3/12=2/3=3/6=0/9=1"
-                        .Split('/').Select(str => str.Split('=')).ToDictionary(arr => arr[0], arr => int.Parse(arr[1]), StringComparer.InvariantCultureIgnoreCase);
-                    int desiredDirection;
-                    if (!acceptableNames.TryGetValue(m.Groups[1].Value, out desiredDirection))
-                    {
-                        yield return "sendtochaterror I don’t recognize that direction. And that despite the fact that I’m pretty lenient! I accept up/down/top/bottom/left/right, north/south/west/east, and even clockface directions.";
-                        yield break;
-                    }
-
-                    yield return null;
-                    yield return new WaitUntil(() => (_curArrowRotation % 90 < 30 || _curArrowRotation % 90 > 60) && (_curArrowRotation < 45 ? 3 : _curArrowRotation < 135 ? 2 : _curArrowRotation < 225 ? 1 : _curArrowRotation < 315 ? 0 : 3) == desiredDirection);
-                    yield return new[] { Squares[_activeSquare.Value] };
-                    yield break;
-
                 default:
-                    yield return "sendtochaterror That is not the correct command for submitting an answer to this square.";
+                    yield return "sendtochaterror @{0} Please report this bug to Timwi: “missing cycling code”. Send along the bomb’s logfile.";
                     yield break;
             }
+        }
+        else if (_activeSquare != null && _codings[_activeSquare.Value] == Coding.Arrows && (m = Regex.Match(command, @"^\s*(?:(?:click at|click on|stop at|stop on|tap at|tap on)\s+)?(?:(?<n>n|north|up?|t|top|12)|(?<e>e|east|r|right|3)|(?<s>s|south|d|down|b|bottom|6)|(?<w>w|west|l|left|9))\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).Success)
+        {
+            var desiredDirection = m.Groups["n"].Success ? 2 : m.Groups["s"].Success ? 0 : m.Groups["w"].Success ? 1 : m.Groups["e"].Success ? 3 : -1;
+            if (desiredDirection < 0)
+            {
+                yield return "sendtochaterror @{0} Please report this bug to Timwi: “unrecognized arrow direction”. Send along the bomb’s logfile.";
+                yield break;
+            }
+
+            yield return null;
+            yield return new WaitUntil(() => (_curArrowRotation % 90 < 30 || _curArrowRotation % 90 > 60) && (_curArrowRotation < 45 ? 3 : _curArrowRotation < 135 ? 2 : _curArrowRotation < 225 ? 1 : _curArrowRotation < 315 ? 0 : 3) == desiredDirection);
+            yield return new[] { Squares[_activeSquare.Value] };
         }
         else if (_activeSquare != null && _codings[_activeSquare.Value] == Coding.MorseCode && (m = Regex.Match(command, @"^\s*(?:(?:morse|tx|transmit|send|submit|enter|input|play)\s+)?([-.]+)\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).Success)
         {
