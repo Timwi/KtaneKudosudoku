@@ -215,10 +215,10 @@ public class KudosudokuModule : MonoBehaviour
             BrailleDots[i].OnInteract = brailleDot(i);
         }
 
-        LetterUpDownButtons[0].OnInteract = lettersUpDown(-6);
-        LetterUpDownButtons[1].OnInteract = lettersUpDown(-1);
-        LetterUpDownButtons[2].OnInteract = lettersUpDown(1);
-        LetterUpDownButtons[3].OnInteract = lettersUpDown(6);
+        LetterUpDownButtons[0].OnInteract = lettersUpDown(6);
+        LetterUpDownButtons[1].OnInteract = lettersUpDown(1);
+        LetterUpDownButtons[2].OnInteract = lettersUpDown(-1);
+        LetterUpDownButtons[3].OnInteract = lettersUpDown(-6);
 
         for (int sq = 0; sq < 16; sq++)
         {
@@ -1418,7 +1418,7 @@ public class KudosudokuModule : MonoBehaviour
             yield return null;
             while (!_curLetter.ToString().Equals(m.Groups[1].Value, StringComparison.InvariantCultureIgnoreCase))
             {
-                yield return new[] { LetterUpDownButtons[2] };
+                yield return new[] { LetterUpDownButtons[1] };
                 yield return "trycancel";
             }
             yield return new[] { Squares[_activeSquare.Value] };
