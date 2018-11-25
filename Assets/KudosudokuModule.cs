@@ -25,6 +25,7 @@ public class KudosudokuModule : MonoBehaviour
     public Texture[] CardSuitTextures;
     public Texture[] MahjongTextures;
     public Texture[] MaritimeFlagTextures;
+    public Texture[] ChessPieceTextures;
 
     public TextMesh LetterTextMesh;
     public TextMesh DigitTextMesh;
@@ -92,7 +93,7 @@ public class KudosudokuModule : MonoBehaviour
         CardSuits,
         Mahjong,
         TheCubeSymbols,
-        ListeningSounds
+        ChessPieces
     }
 
     private static int _moduleIdCounter = 1;
@@ -117,7 +118,6 @@ public class KudosudokuModule : MonoBehaviour
     private List<int> _tapCodeInput;
     /// <summary>While true, the next tap will still be added to the last item in <see cref="_tapCodeInput"/>.</summary>
     private bool _tapCodeLastCodeStillActive;
-    private Coroutine _listeningPlaying;
 
     // Orientations of the semaphores in the panel, and directions they move when clicked
     private int _leftSemaphore = 0;
@@ -158,7 +158,6 @@ public class KudosudokuModule : MonoBehaviour
     private readonly char[] _numberNames = new char[4];
     private readonly bool[] _shown = new bool[16];
     private readonly char[] _theCubeAlternatives = new char[4];
-    private readonly string[] _listeningAlternatives = new string[4];
 
     // ** STATIC DATA **//
 
@@ -169,8 +168,7 @@ public class KudosudokuModule : MonoBehaviour
     private static readonly int[] _semaphoreRightFlagOrientations = new[] { -180, -180, -180, -180, -45, -90, -135, -225, 45, -90, 0, -45, -90, -135, 45, 0, -45, -90, -135, 0, -45, -135, -90, -135, -90, -90 };
     private static readonly string[] _brailleCodes = "1,12,14,145,15,124,1245,125,24,245,13,123,134,1345,135,1234,12345,1235,234,2345,136,1236,2456,1346,13456,1356".Split(',');
     private static readonly int[][] _tapCodes = "11,12,13,14,15,21,22,23,24,25,13,31,32,33,34,35,41,42,43,44,45,51,52,53,54,55".Split(',').Select(str => str.Select(ch => ch - '0').ToArray()).ToArray();
-    private static readonly string[] _simonSamplesSounds = new[] { "HiHat", "OpenHiHat", "Kick", "Snare" };
-    private static readonly string[] _listeningSounds = new[] { "TaxiDispatch", "DialupInternet", "Cow", "PoliceRadioScanner", "ExtractorFan", "CensorshipBleep", "TrainStation", "MedievalWeapons", "Arcade", "DoorClosing", "Casino", "Chainsaw", "Supermarket", "CompressedAir", "SoccerMatch", "ServoMotor", "TawnyOwl", "Waterfall", "SewingMachine", "TearingFabric", "ThrushNightingale", "Zipper", "CarEngine", "VacuumCleaner", "ReloadingGlock19", "BallpointPenWriting", "Oboe", "RattlingIronChain", "Saxophone", "BookPageTurning", "Tuba", "TableTennis", "Marimba", "SqueekyToy", "PhoneRinging", "Helicopter", "TibetanNuns", "FireworkExploding", "ThroatSinging", "GlassShattering" };
+    private static readonly string[] _simonSamplesSounds = new[] { "Kick", "Snare", "HiHat", "OpenHiHat" };
     private static readonly Dictionary<char, string> _morseCode = new Dictionary<char, string> { { 'A', ".-" }, { 'B', "-..." }, { 'C', "-.-." }, { 'D', "-.." }, { 'E', "." }, { 'F', "..-." }, { 'G', "--." }, { 'H', "...." }, { 'I', ".." }, { 'J', ".---" }, { 'K', "-.-" }, { 'L', ".-.." }, { 'M', "--" }, { 'N', "-." }, { 'O', "---" }, { 'P', ".--." }, { 'Q', "--.-" }, { 'R', ".-." }, { 'S', "..." }, { 'T', "-" }, { 'U', "..-" }, { 'V', "...-" }, { 'W', ".--" }, { 'X', "-..-" }, { 'Y', "-.--" }, { 'Z', "--.." }, { '1', ".----" }, { '2', "..---" }, { '3', "...--" }, { '4', "....-" }, { '5', "....." }, { '6', "-...." }, { '7', "--..." }, { '8', "---.." }, { '9', "----." }, { '0', "-----" } };
     private static readonly string[] _arrowDirectionNames = new[] { "down", "left", "up", "right" };
 
@@ -228,10 +226,7 @@ public class KudosudokuModule : MonoBehaviour
         }
 
         for (int i = 0; i < 4; i++)
-        {
             _theCubeAlternatives[i] = (char) ('A' + i + (Rnd.Range(0, 2) != 0 ? 10 : 0));
-            _listeningAlternatives[i] = _listeningSounds[4 * Rnd.Range(0, 10) + i];
-        }
 
         _solution = _allSudokus[Rnd.Range(0, _allSudokus.Length)];
         Debug.LogFormat(@"[Kudosudoku #{0}] Solution:", _moduleId);
@@ -254,14 +249,14 @@ public class KudosudokuModule : MonoBehaviour
             potentialGivens.Remove(Array.IndexOf(_codings, Coding.TapCode));
 
         // FOR DEBUGGING: prevent a specific coding from being pre-filled
-        //potentialGivens.Remove(Array.IndexOf(_codings, Coding.Mahjong));
+        //potentialGivens.Remove(Array.IndexOf(_codings, Coding.ChessPieces));
 
         var givens = Ut.ReduceRequiredSet(potentialGivens, state =>
                 // Special case: if both E and T are letter names, Morse Code must be a given
                 !(_numberNames.Contains('E') && _numberNames.Contains('T') && !state.SetToTest.Contains(Array.IndexOf(_codings, Coding.MorseCode))) &&
 
                 // FOR DEBUGGING: force a specific coding to be pre-filled
-                // state.SetToTest.Contains(Array.IndexOf(_codings, Coding.ListeningSounds)) &&
+                // state.SetToTest.Contains(Array.IndexOf(_codings, Coding.ChessPieces)) &&
 
                 // Make sure that the solution is still unique
                 _allSudokus.Count(sudoku => state.SetToTest.All(ix => sudoku[ix] == _solution[ix])) == 1)
@@ -388,7 +383,6 @@ public class KudosudokuModule : MonoBehaviour
 
             case Coding.TapCode:
             case Coding.SimonSamples:
-            case Coding.ListeningSounds:
                 // Do nothing, as these are audio-only
                 break;
 
@@ -406,7 +400,8 @@ public class KudosudokuModule : MonoBehaviour
                     _codings[sq] == Coding.Snooker ? (_colorblind ? SnookerBallTexturesCB : SnookerBallTextures) :
                     _codings[sq] == Coding.Astrology ? AstrologyTextures :
                     _codings[sq] == Coding.Mahjong ? MahjongTextures :
-                    _codings[sq] == Coding.CardSuits ? CardSuitTextures : null;
+                    _codings[sq] == Coding.CardSuits ? CardSuitTextures :
+                    _codings[sq] == Coding.ChessPieces ? ChessPieceTextures : null;
                 var mr = createGraphic(square, 1);
                 mr.material.mainTexture = textures[_solution[sq]];
                 if (_codings[sq] == Coding.Snooker)
@@ -436,10 +431,6 @@ public class KudosudokuModule : MonoBehaviour
 
                     case Coding.SimonSamples:
                         Audio.PlaySoundAtTransform(_simonSamplesSounds[_solution[sq]], Squares[sq].transform);
-                        break;
-
-                    case Coding.ListeningSounds:
-                        playListeningSound(_listeningAlternatives[_solution[sq]], Squares[sq].transform);
                         break;
 
                     // Allow turning Morse Code on and off
@@ -534,6 +525,10 @@ public class KudosudokuModule : MonoBehaviour
                     startGraphicsCycle(sq, 1, MahjongTextures, "Mahjong tile", 2f, new[] { "plum", "orchid", "chrysanthemum", "bamboo" });
                     break;
 
+                case Coding.ChessPieces:
+                    startGraphicsCycle(sq, 1, ChessPieceTextures, "Chess piece", 2f, new[] { "rook", "knight", "bishop", "queen" });
+                    break;
+
                 case Coding.TheCubeSymbols:
                     reparentAndActivate(TheCubeSymbolsTextMesh.transform, Squares[sq].transform);
                     startCycle(sq, i =>
@@ -545,10 +540,6 @@ public class KudosudokuModule : MonoBehaviour
 
                 case Coding.SimonSamples:
                     startCycle(sq, i => { Audio.PlaySoundAtTransform(_simonSamplesSounds[i], Squares[sq].transform); }, null, "Simon Samples sample", 2f, _simonSamplesSounds, tpVisibleNames: true);
-                    break;
-
-                case Coding.ListeningSounds:
-                    startCycle(sq, i => { playListeningSound(_listeningAlternatives[i], Squares[sq].transform); }, null, "Listening sound", 6.55f, _listeningAlternatives, tpVisibleNames: true);
                     break;
 
                 case Coding.Arrows:
@@ -946,23 +937,6 @@ public class KudosudokuModule : MonoBehaviour
         }
     }
 
-    private void playListeningSound(string soundName, Transform transf)
-    {
-        if (_listeningPlaying != null)
-            StopCoroutine(_listeningPlaying);
-        _listeningPlaying = StartCoroutine(playListeningSoundCoroutine(soundName, transf));
-    }
-
-    private IEnumerator playListeningSoundCoroutine(string soundName, Transform transf)
-    {
-        Audio.PlaySoundAtTransform("TapePlay", transf);
-        yield return new WaitForSeconds(.5f);
-        Audio.PlaySoundAtTransform(soundName, transf);
-        yield return new WaitForSeconds(4.5f);
-        Audio.PlaySoundAtTransform("TapeStop", transf);
-        _listeningPlaying = null;
-    }
-
     private IEnumerator playTapCode(int[] taps, Transform transf)
     {
         yield return new WaitForSeconds(.1f);
@@ -1246,8 +1220,28 @@ public class KudosudokuModule : MonoBehaviour
         else if ((m = Regex.Match(command, @"^\s*(?:(?:tap|click|press)\s+)?([A-D])\s*([1-4])\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).Success)
         {
             yield return null;
+
             var coord = (char.ToUpperInvariant(m.Groups[1].Value[0]) - 'A') + 4 * (m.Groups[2].Value[0] - '1');
             var wasShown = _shown[coord];
+
+            // Be gracious to the user and not give a strike if they activate a new square immediately after stopping a cycling
+            if (_activeSquare != null && _tpRepeatedlyClicking == null && !wasShown)
+            {
+                switch (_codings[_activeSquare.Value])
+                {
+                    case Coding.Digits:
+                    case Coding.MaritimeFlags:
+                    case Coding.SimonSamples:
+                    case Coding.Astrology:
+                    case Coding.Snooker:
+                    case Coding.CardSuits:
+                    case Coding.Mahjong:
+                    case Coding.TheCubeSymbols:
+                    case Coding.ChessPieces:
+                        yield return new WaitUntil(() => _activeSquare == null);
+                        break;
+                }
+            }
 
             // Tap the square
             yield return new[] { Squares[coord] };
@@ -1266,11 +1260,8 @@ public class KudosudokuModule : MonoBehaviour
                     case Coding.CardSuits:
                     case Coding.Mahjong:
                     case Coding.TheCubeSymbols:
+                    case Coding.ChessPieces:
                         _tpRepeatedlyClicking = StartCoroutine(tpRepeatedlyClick(1.25f, Squares[coord]));
-                        break;
-
-                    case Coding.ListeningSounds:
-                        _tpRepeatedlyClicking = StartCoroutine(tpRepeatedlyClick(4.9f, Squares[coord]));
                         break;
                 }
             }
@@ -1291,11 +1282,11 @@ public class KudosudokuModule : MonoBehaviour
                 case Coding.CardSuits:
                 case Coding.Mahjong:
                 case Coding.TheCubeSymbols:
+                case Coding.ChessPieces:
                     yield return string.Format("sendtochat The names are {0}.", Enumerable.Range(0, 4).Select(i => string.Format("“{0}”", _tpCyclingNames[i])).JoinString(", "));
                     yield break;
 
                 case Coding.SimonSamples:
-                case Coding.ListeningSounds:
                     yield return "sendtochat Use the names shown in the square.";
                     yield break;
 
@@ -1325,7 +1316,7 @@ public class KudosudokuModule : MonoBehaviour
                 case Coding.CardSuits:
                 case Coding.Mahjong:
                 case Coding.TheCubeSymbols:
-                case Coding.ListeningSounds:
+                case Coding.ChessPieces:
                     if (!_tpCyclingNames.Any(cn => cn.Equals(value, StringComparison.InvariantCultureIgnoreCase)))
                         yield return "sendtochaterror I don’t recognize that name.";
                     else
@@ -1340,8 +1331,8 @@ public class KudosudokuModule : MonoBehaviour
                         _tpRepeatedlyClicking = null;
                         while (!_tpCyclingName.Equals(value, StringComparison.InvariantCultureIgnoreCase))
                         {
+                            yield return new WaitForSeconds(.3f);
                             yield return new[] { Squares[_activeSquare.Value] };
-                            yield return new WaitForSeconds(.5f);
                             yield return "trycancel";
                         }
                     }
