@@ -102,6 +102,9 @@ public class KudosudokuModule : MonoBehaviour
     private bool _isSolved;
     private Coding[] _codings;
     private bool _colorblind;
+    private bool _longPress;
+    private KMSelectable _longPressSelectable;
+    private Coroutine _longPressCoroutine;
 
     // Used both for colorblind mode (dark red/blue expecting Morse/Tap Code) and for TP (S1–S4 for sounds)
     private TextMesh _extraText;
@@ -202,8 +205,10 @@ public class KudosudokuModule : MonoBehaviour
         BraillePanel.SetActive(false);
         LettersPanel.SetActive(false);
 
-        SemaphoresLeftSelectable.OnInteract = semaphoresLeftHand;
-        SemaphoresRightSelectable.OnInteract = semaphoresRightHand;
+        SemaphoresLeftSelectable.OnInteract = startLongPress(SemaphoresLeftSelectable);
+        SemaphoresLeftSelectable.OnInteractEnded = releaseLongPress(SemaphoresLeftSelectable, semaphoresLeftHandDown, () => { _leftSemaphoreCw = !_leftSemaphoreCw; semaphoresLeftHandDown(); });
+        SemaphoresRightSelectable.OnInteract = startLongPress(SemaphoresRightSelectable);
+        SemaphoresRightSelectable.OnInteractEnded = releaseLongPress(SemaphoresRightSelectable, semaphoresRightHandDown, () => { _rightSemaphoreCw = !_rightSemaphoreCw; semaphoresRightHandDown(); });
         for (int i = 0; i < BinaryDigits.Length; i++)
             BinaryDigits[i].OnInteract = binaryDigit(i);
         for (int i = 0; i < 6; i++)
@@ -269,20 +274,6 @@ public class KudosudokuModule : MonoBehaviour
         foreach (var ix in givens)
             showSquare(ix, initial: true);
         StartCoroutine(processPanelAnimationQueue());
-    }
-
-    private void setTpCbText(int sq, string text, int fontSize)
-    {
-        if (_extraText == null)
-        {
-            _extraText = Instantiate(LetterTextMesh);
-            _extraText.name = "TpCbText";
-            _extraText.color = Color.white;
-        }
-        _extraText.text = text;
-        _extraText.fontSize = fontSize;
-        reparentAndActivate(_extraText.transform, Squares[sq].transform);
-        _extraText.transform.localPosition = new Vector3(0, -.04f, -.0001f);
     }
 
     private void showSquare(int sq, bool initial)
@@ -417,9 +408,6 @@ public class KudosudokuModule : MonoBehaviour
     {
         return delegate
         {
-            if (_isSolved)
-                return false;
-
             if (_shown[sq])
             {
                 // Re-play a sound if there is one
@@ -710,30 +698,28 @@ public class KudosudokuModule : MonoBehaviour
         _tapCodeInput = null;
     }
 
-    private bool semaphoresLeftHand()
+    private void semaphoresLeftHandDown()
     {
         if (_isSolved || _activeSquare == null || _codings[_activeSquare.Value] != Coding.Semaphores)
-            return false;
+            return;
 
         if (_leftSemaphore == (_leftSemaphoreCw ? -45 : 225))
             _leftSemaphoreCw = !_leftSemaphoreCw;
         var oldLeft = _leftSemaphore;
         _leftSemaphore += _leftSemaphoreCw ? -45 : 45;
         startSemaphoreAnimation(oldLeft, _rightSemaphore);
-        return false;
     }
 
-    private bool semaphoresRightHand()
+    private void semaphoresRightHandDown()
     {
         if (_isSolved || _activeSquare == null || _codings[_activeSquare.Value] != Coding.Semaphores)
-            return false;
+            return;
 
         if (_rightSemaphore == (_rightSemaphoreCw ? -225 : 45))
             _rightSemaphoreCw = !_rightSemaphoreCw;
         var oldRight = _rightSemaphore;
         _rightSemaphore += _rightSemaphoreCw ? -45 : 45;
         startSemaphoreAnimation(_leftSemaphore, oldRight);
-        return false;
     }
 
     private KMSelectable.OnInteractHandler semaphoresSubmit(int sq)
@@ -1151,6 +1137,57 @@ public class KudosudokuModule : MonoBehaviour
     {
         t /= duration;
         return (end - start) * t * t + start;
+    }
+
+    private KMSelectable.OnInteractHandler startLongPress(KMSelectable selectable)
+    {
+        return delegate
+        {
+            if (_longPressCoroutine != null)
+                StopCoroutine(_longPressCoroutine);
+            _longPressCoroutine = StartCoroutine(longPress(selectable));
+            return false;
+        };
+    }
+
+    private IEnumerator longPress(KMSelectable selectable)
+    {
+        _longPress = false;
+        _longPressSelectable = selectable;
+        yield return new WaitForSeconds(.3f);
+        _longPress = true;
+        Audio.PlaySoundAtTransform("Selection", selectable.transform);
+        _longPressCoroutine = null;
+    }
+
+    private Action releaseLongPress(KMSelectable selectable, Action shortPress, Action longPress)
+    {
+        return delegate
+        {
+            if (_longPressSelectable != selectable)
+                return;
+            if (_longPressCoroutine != null)
+                StopCoroutine(_longPressCoroutine);
+            _longPressCoroutine = null;
+            if (_longPress)
+                longPress();
+            else
+                shortPress();
+        };
+    }
+
+    private void setTpCbText(int sq, string text, int fontSize)
+    {
+        if (_extraText == null)
+        {
+            _extraText = Instantiate(LetterTextMesh);
+            _extraText.name = "TpCbText";
+            _extraText.color = Color.white;
+        }
+        _extraText.text = text;
+        _extraText.fontSize = fontSize;
+        reparentAndActivate(_extraText.transform, Squares[sq].transform);
+        _extraText.transform.localPosition = new Vector3(0, -.04f, -.0001f);
     }
 
     // ** TWITCH PLAYS ** //
