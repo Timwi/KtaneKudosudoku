@@ -71,6 +71,7 @@ public class KudosudokuModule : MonoBehaviour
     public Material SquareExpectingMorseDown;
     public Material SquareExpectingTapCode;
     public Material SquareExpectingAnswer;
+    public Material SquareExpectingPanelAnswer;
 
     private MeshRenderer[] _squaresMR;
     private MeshRenderer[] _brailleDotsMR;
@@ -473,14 +474,14 @@ public class KudosudokuModule : MonoBehaviour
                 case Coding.Semaphores:
                 case Coding.Binary:
                     _panelAnimationQueue.Enqueue(new PanelAnimationInfo(TopPanelCover.transform, 0, 0, 0, -7, TopPanelBacking.transform, (_codings[sq] == Coding.Semaphores ? SemaphoresPanel : BinaryPanel).transform, open: true));
-                    _squaresMR[sq].material = SquareExpectingAnswer;
+                    _squaresMR[sq].material = SquareExpectingPanelAnswer;
                     Squares[sq].OnInteract = _codings[sq] == Coding.Semaphores ? semaphoresSubmit(sq) : binarySubmit(sq);
                     break;
 
                 case Coding.Braille:
                 case Coding.Letters:
                     _panelAnimationQueue.Enqueue(new PanelAnimationInfo(RightPanelCover.transform, 0, -7, 0, 0, RightPanelBacking.transform, (_codings[sq] == Coding.Braille ? BraillePanel : LettersPanel).transform, open: true));
-                    _squaresMR[sq].material = SquareExpectingAnswer;
+                    _squaresMR[sq].material = SquareExpectingPanelAnswer;
                     Squares[sq].OnInteract = _codings[sq] == Coding.Braille ? brailleSubmit(sq) : lettersSubmit(sq);
                     break;
 

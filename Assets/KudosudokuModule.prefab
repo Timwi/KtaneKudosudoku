@@ -437,6 +437,8 @@ MonoBehaviour:
     type: 2}
   SquareExpectingAnswer: {fileID: 2100000, guid: 2ad2902e7ecae2640a32e835f67268d6,
     type: 2}
+  SquareExpectingPanelAnswer: {fileID: 2100000, guid: b9ac9e4b17904204b88cae10a669435f,
+    type: 2}
 --- !u!114 &11489324
 MonoBehaviour:
   m_ObjectHideFlags: 1
@@ -5950,7 +5952,7 @@ MeshRenderer:
   m_LightProbeUsage: 1
   m_ReflectionProbeUsage: 1
   m_Materials:
-  - {fileID: 2100000, guid: 149147c431a09654fad3d24bfb01ed66, type: 2}
+  - {fileID: 2100000, guid: b9ac9e4b17904204b88cae10a669435f, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
