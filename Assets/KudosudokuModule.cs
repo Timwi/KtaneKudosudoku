@@ -159,7 +159,8 @@ public class KudosudokuModule : MonoBehaviour
             Open = open;
         }
     }
-    private readonly Queue<PanelAnimationInfo> _panelAnimationQueue = new Queue<PanelAnimationInfo>();
+    private readonly Queue<PanelAnimationInfo> _topPanelAnimationQueue = new Queue<PanelAnimationInfo>();
+    private readonly Queue<PanelAnimationInfo> _rightPanelAnimationQueue = new Queue<PanelAnimationInfo>();
 
     private readonly char[] _numberNames = new char[4];
     private readonly bool[] _shown = new bool[16];
@@ -272,7 +273,8 @@ public class KudosudokuModule : MonoBehaviour
 
         foreach (var ix in givens)
             showSquare(ix, initial: true);
-        StartCoroutine(processPanelAnimationQueue());
+        StartCoroutine(processPanelAnimationQueue(_topPanelAnimationQueue));
+        StartCoroutine(processPanelAnimationQueue(_rightPanelAnimationQueue));
     }
 
     private void showSquare(int sq, bool initial)
@@ -488,14 +490,14 @@ public class KudosudokuModule : MonoBehaviour
 
                 case Coding.Semaphores:
                 case Coding.Binary:
-                    _panelAnimationQueue.Enqueue(new PanelAnimationInfo(TopPanelCover.transform, 0, 0, 0, -7, TopPanelBacking.transform, (_codings[sq] == Coding.Semaphores ? SemaphoresPanel : BinaryPanel).transform, open: true));
+                    _topPanelAnimationQueue.Enqueue(new PanelAnimationInfo(TopPanelCover.transform, 0, 0, 0, -7, TopPanelBacking.transform, (_codings[sq] == Coding.Semaphores ? SemaphoresPanel : BinaryPanel).transform, open: true));
                     _squaresMR[sq].material = SquareExpectingPanelAnswer;
                     Squares[sq].OnInteract = _codings[sq] == Coding.Semaphores ? semaphoresSubmit(sq) : binarySubmit(sq);
                     break;
 
                 case Coding.Braille:
                 case Coding.Letters:
-                    _panelAnimationQueue.Enqueue(new PanelAnimationInfo(RightPanelCover.transform, 0, -7, 0, 0, RightPanelBacking.transform, (_codings[sq] == Coding.Braille ? BraillePanel : LettersPanel).transform, open: true));
+                    _rightPanelAnimationQueue.Enqueue(new PanelAnimationInfo(RightPanelCover.transform, 0, -7, 0, 0, RightPanelBacking.transform, (_codings[sq] == Coding.Braille ? BraillePanel : LettersPanel).transform, open: true));
                     _squaresMR[sq].material = SquareExpectingPanelAnswer;
                     Squares[sq].OnInteract = _codings[sq] == Coding.Braille ? brailleSubmit(sq) : lettersSubmit(sq);
                     break;
@@ -765,7 +767,7 @@ public class KudosudokuModule : MonoBehaviour
                     string.Format("{0}.{1}", orientationNames[leftExpect], orientationNames[rightExpect]));
             }
 
-            _panelAnimationQueue.Enqueue(new PanelAnimationInfo(TopPanelCover.transform, 0, 0, -7, 0, TopPanelBacking.transform, SemaphoresPanel.transform, open: false));
+            _topPanelAnimationQueue.Enqueue(new PanelAnimationInfo(TopPanelCover.transform, 0, 0, -7, 0, TopPanelBacking.transform, SemaphoresPanel.transform, open: false));
             _activeSquare = null;
             Squares[sq].OnInteract = squarePress(sq);
             return false;
@@ -800,7 +802,7 @@ public class KudosudokuModule : MonoBehaviour
             else
                 strikeAndReshuffle(sq, string.Format("Binary {0}", provided), expected);
 
-            _panelAnimationQueue.Enqueue(new PanelAnimationInfo(TopPanelCover.transform, 0, 0, -7, 0, TopPanelBacking.transform, BinaryPanel.transform, open: false));
+            _topPanelAnimationQueue.Enqueue(new PanelAnimationInfo(TopPanelCover.transform, 0, 0, -7, 0, TopPanelBacking.transform, BinaryPanel.transform, open: false));
             _activeSquare = null;
             Squares[sq].OnInteract = squarePress(sq);
             return false;
@@ -835,7 +837,7 @@ public class KudosudokuModule : MonoBehaviour
             else
                 strikeAndReshuffle(sq, string.Format("Braille {0}", provided), expected);
 
-            _panelAnimationQueue.Enqueue(new PanelAnimationInfo(RightPanelCover.transform, -7, 0, 0, 0, RightPanelBacking.transform, BraillePanel.transform, open: false));
+            _rightPanelAnimationQueue.Enqueue(new PanelAnimationInfo(RightPanelCover.transform, -7, 0, 0, 0, RightPanelBacking.transform, BraillePanel.transform, open: false));
             _activeSquare = null;
             Squares[sq].OnInteract = squarePress(sq);
             return false;
@@ -867,7 +869,7 @@ public class KudosudokuModule : MonoBehaviour
             else
                 strikeAndReshuffle(sq, string.Format("Letter {0}", _curLetter), _numberNames[_solution[sq]].ToString());
 
-            _panelAnimationQueue.Enqueue(new PanelAnimationInfo(RightPanelCover.transform, -7, 0, 0, 0, RightPanelBacking.transform, LettersPanel.transform, open: false));
+            _rightPanelAnimationQueue.Enqueue(new PanelAnimationInfo(RightPanelCover.transform, -7, 0, 0, 0, RightPanelBacking.transform, LettersPanel.transform, open: false));
             _activeSquare = null;
             Squares[sq].OnInteract = squarePress(sq);
             return false;
@@ -925,14 +927,14 @@ public class KudosudokuModule : MonoBehaviour
         _activePanelAnimations--;
     }
 
-    private IEnumerator processPanelAnimationQueue()
+    private IEnumerator processPanelAnimationQueue(Queue<PanelAnimationInfo> queue)
     {
         yield return null;
 
         while (true)
         {
-            yield return new WaitUntil(() => _panelAnimationQueue.Count > 0);
-            var element = _panelAnimationQueue.Dequeue();
+            yield return new WaitUntil(() => queue.Count > 0);
+            var element = queue.Dequeue();
             StartCoroutine(slidePanelCover(element.Cover, element.X1, element.X2, element.Z1, element.Z2, element.Open));
             StartCoroutine(slidePanelPanel(element.Backing, element.Panel, element.Open));
             yield return new WaitUntil(() => _activePanelAnimations == 0);
