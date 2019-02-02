@@ -106,6 +106,8 @@ public class KudosudokuModule : MonoBehaviour
     private bool _longPress;
     private KMSelectable _longPressSelectable;
     private Coroutine _longPressCoroutine;
+    private Coroutine _delaySubmitCoroutine;
+    private Action _delaySubmitAction;
 
     // Used both for colorblind mode (dark red/blue expecting Morse/Tap Code) and for TP (S1–S4 for sounds)
     private TextMesh _extraText;
@@ -435,12 +437,27 @@ public class KudosudokuModule : MonoBehaviour
                 return false;
             }
 
+            // Another square is still active — submit it
             if (_activeSquare != null && _activeSquare.Value != sq)
             {
-                Module.HandleStrike();
-                Debug.LogFormat(@"[Kudosudoku #{0}] You received a strike because you pressed on unsolved square {1}{2} while square {3}{4} was still waiting for {5} input.",
-                    _moduleId, (char) ('A' + sq % 4), (char) ('1' + sq / 4), (char) ('A' + _activeSquare.Value % 4), (char) ('1' + _activeSquare.Value / 4), _codings[_activeSquare.Value]);
-                return false;
+                if (_delaySubmitCoroutine != null)
+                {
+                    _delaySubmitAction();
+                    _delaySubmitAction = null;
+                    StopCoroutine(_delaySubmitCoroutine);
+                    _delaySubmitCoroutine = null;
+                }
+                else if (_codings[_activeSquare.Value] == Coding.MorseCode || _codings[_activeSquare.Value] == Coding.TapCode)
+                {
+                    Module.HandleStrike();
+                    Debug.LogFormat(@"[Kudosudoku #{0}] You received a strike because you pressed on unsolved square {1}{2} while square {3}{4} was still waiting for {5} input.",
+                        _moduleId, (char) ('A' + sq % 4), (char) ('1' + sq / 4), (char) ('A' + _activeSquare.Value % 4), (char) ('1' + _activeSquare.Value / 4), _codings[_activeSquare.Value]);
+                    return false;
+                }
+                else
+                {
+                    Squares[_activeSquare.Value].OnInteract();
+                }
             }
 
             // User clicked on an unsolved square
@@ -580,7 +597,7 @@ public class KudosudokuModule : MonoBehaviour
     {
         return delegate
         {
-            // Check if mouse is already up. This should ideally never happen, but could be because the OnInteractEnded handler is swapped out when the user presses the square the first time: 
+            // Check if mouse is already up. This should ideally never happen, but could be because the OnInteractEnded handler is swapped out when the user presses the square the first time:
             if (_morsePressTimes.Count % 2 == 0)
                 return;
             _morsePressTimes.Add(Time.time);
@@ -1014,7 +1031,16 @@ public class KudosudokuModule : MonoBehaviour
         var cycle = Enumerable.Range(0, 4).ToArray().Shuffle();
         showOption(cycle[0]);
         var ix = 0;
-        var coroutine = StartCoroutine(submitAfterDelay(sq, submissionDelay, cycle[0], codingName, answerNames, cleanUp));
+
+        _delaySubmitAction = () =>
+        {
+            if (cleanUp != null)
+                cleanUp();
+            submitAnswer(sq, cycle[ix], codingName + " " + answerNames[cycle[ix]], answerNames[_solution[sq]]);
+            _tpCyclingNames = null;
+        };
+
+        _delaySubmitCoroutine = StartCoroutine(submitAfterDelay(submissionDelay));
         if (tpAnswerNames == null)
         {
             tpAnswerNames = new string[4];
@@ -1027,14 +1053,14 @@ public class KudosudokuModule : MonoBehaviour
 
         Squares[sq].OnInteract = delegate
         {
-            if (coroutine != null)
-                StopCoroutine(coroutine);
+            if (_delaySubmitCoroutine != null)
+                StopCoroutine(_delaySubmitCoroutine);
             ix = (ix + 1) % 4;
             if (TwitchPlaysActive && tpVisibleNames)
                 setTpCbText(sq, tpAnswerNames[cycle[ix]], 64);
             _tpCyclingName = tpAnswerNames[cycle[ix]];
             showOption(cycle[ix]);
-            coroutine = StartCoroutine(submitAfterDelay(sq, submissionDelay, cycle[ix], codingName, answerNames, cleanUp));
+            _delaySubmitCoroutine = StartCoroutine(submitAfterDelay(submissionDelay));
             return false;
         };
     }
@@ -1056,13 +1082,13 @@ public class KudosudokuModule : MonoBehaviour
             codingName, submissionDelay, answerNames, tpAnswerNames ?? answerNames);
     }
 
-    private IEnumerator submitAfterDelay(int sq, float submissionDelay, int answer, string codingName, string[] answerNames, Action cleanUp)
+    private IEnumerator submitAfterDelay(float submissionDelay)
     {
         yield return new WaitForSeconds(submissionDelay);
-        if (cleanUp != null)
-            cleanUp();
-        submitAnswer(sq, answer, codingName + " " + answerNames[answer], answerNames[_solution[sq]]);
-        _tpCyclingNames = null;
+        if (_delaySubmitAction != null)
+            _delaySubmitAction();
+        _delaySubmitAction = null;
+        _delaySubmitCoroutine = null;
     }
 
     // ** OTHER FUNCTIONS ** //
