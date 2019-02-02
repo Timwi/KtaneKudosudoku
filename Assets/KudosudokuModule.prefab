@@ -375,7 +375,7 @@ MonoBehaviour:
   - {fileID: 2800000, guid: f3b09935862a411439d2c7df59ca3b1c, type: 3}
   LetterTextMesh: {fileID: 102761088661955526}
   DigitTextMesh: {fileID: 102535288324170984}
-  TheCubeSymbolsTextMesh: {fileID: 102250330226914226}
+  ZoniTextMesh: {fileID: 102250330226914226}
   MorseWrong: {fileID: 102792389344522490}
   SemaphoresParent: {fileID: 1081872002314828}
   BrailleParent: {fileID: 1427768525618868}
@@ -620,7 +620,7 @@ GameObject:
   - component: {fileID: 102250330226914226}
   - component: {fileID: 114785551596778996}
   m_Layer: 0
-  m_Name: TheCubeSymbols
+  m_Name: Zoni
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4224,7 +4224,7 @@ Transform:
   m_PrefabInternal: {fileID: 100100000}
   m_GameObject: {fileID: 1053064421950790}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: -0.0001}
+  m_LocalPosition: {x: 0, y: -0.16, z: -0.001}
   m_LocalScale: {x: 0.1, y: 0.1, z: 0.1}
   m_Children: []
   m_Father: {fileID: 4127173068389762}
@@ -7678,13 +7678,13 @@ TextMesh:
   m_Anchor: 4
   m_Alignment: 1
   m_TabSize: 4
-  m_FontSize: 92
+  m_FontSize: 80
   m_FontStyle: 0
   m_RichText: 1
-  m_Font: {fileID: 12800000, guid: 6a0ada36a461f6d4382be4ce7fd59d23, type: 3}
+  m_Font: {fileID: 12800000, guid: 098be3f0bbbb1bc49b4b4f73a58bc040, type: 3}
   m_Color:
     serializedVersion: 2
-    rgba: 4278255369
+    rgba: 4282777420
 --- !u!102 &102258477768736284
 TextMesh:
   serializedVersion: 3
@@ -7728,7 +7728,7 @@ TextMesh:
   m_Font: {fileID: 12800000, guid: 9fcece72780a1e446bfaac6a33560b36, type: 3}
   m_Color:
     serializedVersion: 2
-    rgba: 4278255369
+    rgba: 4282777420
 --- !u!102 &102356019408071528
 TextMesh:
   serializedVersion: 3
@@ -7793,7 +7793,7 @@ TextMesh:
   m_Font: {fileID: 12800000, guid: 9fcece72780a1e446bfaac6a33560b36, type: 3}
   m_Color:
     serializedVersion: 2
-    rgba: 4278403072
+    rgba: 4279452688
 --- !u!102 &102499903923100902
 TextMesh:
   serializedVersion: 3

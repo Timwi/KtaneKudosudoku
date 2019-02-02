@@ -1,6 +1,6 @@
 fileFormatVersion: 2
-guid: 6a0ada36a461f6d4382be4ce7fd59d23
-timeCreated: 1542324063
+guid: 098be3f0bbbb1bc49b4b4f73a58bc040
+timeCreated: 1548281560
 licenseType: Free
 TrueTypeFontImporter:
   serializedVersion: 4
@@ -9,9 +9,9 @@ TrueTypeFontImporter:
   characterSpacing: 0
   characterPadding: 1
   includeFontData: 1
-  fontName: KR A Round
+  fontName: Zoni
   fontNames:
-  - KR A Round
+  - Zoni
   fallbackFontReferences: []
   customCharacters: 
   fontRenderingMode: 0

@@ -29,7 +29,7 @@ public class KudosudokuModule : MonoBehaviour
 
     public TextMesh LetterTextMesh;
     public TextMesh DigitTextMesh;
-    public TextMesh TheCubeSymbolsTextMesh;
+    public TextMesh ZoniTextMesh;
     public TextMesh MorseWrong;
 
     public GameObject SemaphoresParent;
@@ -93,7 +93,7 @@ public class KudosudokuModule : MonoBehaviour
         Arrows,
         CardSuits,
         Mahjong,
-        TheCubeSymbols,
+        Zoni,
         ChessPieces
     }
 
@@ -161,7 +161,6 @@ public class KudosudokuModule : MonoBehaviour
 
     private readonly char[] _numberNames = new char[4];
     private readonly bool[] _shown = new bool[16];
-    private readonly char[] _theCubeAlternatives = new char[4];
 
     // ** STATIC DATA **//
 
@@ -188,7 +187,7 @@ public class KudosudokuModule : MonoBehaviour
 
         LetterTextMesh.gameObject.SetActive(false);
         DigitTextMesh.gameObject.SetActive(false);
-        TheCubeSymbolsTextMesh.gameObject.SetActive(false);
+        ZoniTextMesh.gameObject.SetActive(false);
         SemaphoresParent.SetActive(false);
         BrailleParent.SetActive(false);
         BinaryParent.SetActive(false);
@@ -231,9 +230,6 @@ public class KudosudokuModule : MonoBehaviour
             Squares[sq].OnInteract = squarePress(sq);
         }
 
-        for (int i = 0; i < 4; i++)
-            _theCubeAlternatives[i] = (char) ('A' + i + (Rnd.Range(0, 2) != 0 ? 10 : 0));
-
         _solution = _allSudokus[Rnd.Range(0, _allSudokus.Length)];
         Debug.LogFormat(@"[Kudosudoku #{0}] Solution:", _moduleId);
         for (int row = 0; row < 4; row++)
@@ -262,7 +258,7 @@ public class KudosudokuModule : MonoBehaviour
                 !(_numberNames.Contains('E') && _numberNames.Contains('T') && !state.SetToTest.Contains(Array.IndexOf(_codings, Coding.MorseCode))) &&
 
                 // FOR DEBUGGING: force a specific coding to be pre-filled
-                // state.SetToTest.Contains(Array.IndexOf(_codings, Coding.ChessPieces)) &&
+                //state.SetToTest.Contains(Array.IndexOf(_codings, Coding.Zoni)) &&
 
                 // Make sure that the solution is still unique
                 _allSudokus.Count(sudoku => state.SetToTest.All(ix => sudoku[ix] == _solution[ix])) == 1)
@@ -314,10 +310,12 @@ public class KudosudokuModule : MonoBehaviour
                 break;
             }
 
-            case Coding.TheCubeSymbols:
+            case Coding.Zoni:
             {
-                reparentAndActivate(TheCubeSymbolsTextMesh.transform, square);
-                TheCubeSymbolsTextMesh.text = _theCubeAlternatives[_solution[sq]].ToString();
+                reparentAndActivate(ZoniTextMesh.transform, square);
+
+                // Usually we’ll show the letter, but if Zoni is an initial given, it has a 1-in-10 chance of showing the digit 1–4 instead.
+                ZoniTextMesh.text = (initial && (Rnd.Range(0, 10) == 0) ? (char) (_solution[sq] + '1') : _numberNames[_solution[sq]]).ToString();
                 break;
             }
 
@@ -366,9 +364,9 @@ public class KudosudokuModule : MonoBehaviour
                 reparentAndActivate(MorseParent.transform, square);
 
                 // Usually we’ll blink the letter, but:
-                //  • If Morse Code is an initial given, it has a 1-in-3 chance of blinking the digit 1–4 instead.
+                //  • If Morse Code is an initial given, it has a 1-in-5 chance of blinking the digit 1–4 instead.
                 //  • If Morse Code is an initial given, would have to blink E or T, and both E and T are number names, definitely blink the digit instead
-                _morseCharacterToBlink = initial && (Rnd.Range(0, 3) == 0 || (_numberNames.Contains('E') && _numberNames.Contains('T') && "ET".Contains(_numberNames[_solution[sq]]))) ? (char) (_solution[sq] + '1') : _numberNames[_solution[sq]];
+                _morseCharacterToBlink = initial && (Rnd.Range(0, 5) == 0 || (_numberNames.Contains('E') && _numberNames.Contains('T') && "ET".Contains(_numberNames[_solution[sq]]))) ? (char) (_solution[sq] + '1') : _numberNames[_solution[sq]];
                 _morseBlinking = StartCoroutine(blinkMorse());
                 break;
             }
@@ -518,13 +516,13 @@ public class KudosudokuModule : MonoBehaviour
                     startGraphicsCycle(sq, 1, ChessPieceTextures, "Chess piece", 2f, new[] { "rook", "knight", "bishop", "queen" });
                     break;
 
-                case Coding.TheCubeSymbols:
-                    reparentAndActivate(TheCubeSymbolsTextMesh.transform, Squares[sq].transform);
+                case Coding.Zoni:
+                    reparentAndActivate(ZoniTextMesh.transform, Squares[sq].transform);
                     startCycle(sq, i =>
                     {
                         Audio.PlaySoundAtTransform("Selection", Squares[sq].transform);
-                        TheCubeSymbolsTextMesh.text = _theCubeAlternatives[i].ToString();
-                    }, () => { TheCubeSymbolsTextMesh.gameObject.SetActive(false); }, "The Cube symbol", 2f, _theCubeAlternatives.Select(ch => ch.ToString()).ToArray(), _theCubeAlternatives.Select(ch => _tpTheCubeSymbolNames[ch - 'A']).ToArray());
+                        ZoniTextMesh.text = _numberNames[i].ToString();
+                    }, () => { ZoniTextMesh.gameObject.SetActive(false); }, "Zoni letter", 2f, _numberNames.Select(ch => ch.ToString()).ToArray(), _numberNames.Select(ch => _tpZoniLetterNames[ch - 'A']).ToArray());
                     break;
 
                 case Coding.SimonSamples:
@@ -1223,7 +1221,35 @@ public class KudosudokuModule : MonoBehaviour
         "yellow-blue-red-black diagonal quadrants"
     };
 
-    private static readonly string[] _tpTheCubeSymbolNames = new[] { "Tunnel", "Doll", "Pluto", "Squeeze", null, null, null, null, null, null, "Stonehenge", "Vortex", "Ribbon", "Meteor" };
+    private static readonly string[] _tpZoniLetterNames = new[] {
+        // We only need the letters A-Z for submitting an answer in TP.
+        /* A */ "3 dots triangle inside circle",
+        /* B */ "filled circle inside outline with dots on top and bottom",
+        /* C */ "filled circle inside left half-circle",
+        /* D */ "2 dots vertical inside right half-circle",
+        /* E */ "3 dots vertical inside circle",
+        /* F */ "left half-circle with dots on each end",
+        /* G */ "dot inside circle with gaps at N, E, S and W",
+        /* H */ "3 dots horizontal inside circle with gaps at N and S",
+        /* I */ "filled circle with dot above and below",
+        /* J */ "filled circle with quarter-circles at NW and SE",
+        /* K */ "3 dots triangle with half-circle on left",
+        /* L */ "filled circle surrounded by 3 unequal arcs",
+        /* M */ "3 dots horizontal below top half-circle",
+        /* N */ "2 quarter-circles with dots below",
+        /* O */ "filled circle",
+        /* P */ "filled circle inside left half-circle with dots on top and bottom",
+        /* Q */ "three-quarter-circle with dot inside gap at SE",
+        /* R */ "circle with gaps at NW, NE, SE and SW",
+        /* S */ "circle with gaps at NW and SE",
+        /* T */ "3 dots diagonal inside top-left half-circle",
+        /* U */ "3 dots diagonal inside bottom-right half-circle",
+        /* V */ "filled circle with dots at N, SE and SW",
+        /* W */ "3 dots vertical inside circle with gaps at N and S",
+        /* X */ "filled circle inside circle with gaps at N, E, S and W",
+        /* Y */ "filled circle inside circle",
+        /* Z */ "2 dots angled inside circle with gaps at E and W",
+    };
     private string[] _tpCyclingNames;
     private string _tpCyclingName;
     private Coroutine _tpRepeatedlyClicking;
@@ -1274,7 +1300,7 @@ public class KudosudokuModule : MonoBehaviour
                     case Coding.Snooker:
                     case Coding.CardSuits:
                     case Coding.Mahjong:
-                    case Coding.TheCubeSymbols:
+                    case Coding.Zoni:
                     case Coding.ChessPieces:
                         yield return new WaitUntil(() => _activeSquare == null);
                         break;
@@ -1297,7 +1323,7 @@ public class KudosudokuModule : MonoBehaviour
                     case Coding.Snooker:
                     case Coding.CardSuits:
                     case Coding.Mahjong:
-                    case Coding.TheCubeSymbols:
+                    case Coding.Zoni:
                     case Coding.ChessPieces:
                         _tpRepeatedlyClicking = StartCoroutine(tpRepeatedlyClick(1.25f, Squares[coord]));
                         break;
@@ -1319,7 +1345,7 @@ public class KudosudokuModule : MonoBehaviour
                 case Coding.Snooker:
                 case Coding.CardSuits:
                 case Coding.Mahjong:
-                case Coding.TheCubeSymbols:
+                case Coding.Zoni:
                 case Coding.ChessPieces:
                     yield return string.Format("sendtochat The names are {0}.", Enumerable.Range(0, 4).Select(i => string.Format("“{0}”", _tpCyclingNames[i])).JoinString(", "));
                     yield break;
@@ -1353,7 +1379,7 @@ public class KudosudokuModule : MonoBehaviour
                 case Coding.Snooker:
                 case Coding.CardSuits:
                 case Coding.Mahjong:
-                case Coding.TheCubeSymbols:
+                case Coding.Zoni:
                 case Coding.ChessPieces:
                     if (!_tpCyclingNames.Any(cn => cn.Equals(value, StringComparison.InvariantCultureIgnoreCase)))
                         yield return "sendtochaterror I don’t recognize that name.";
