@@ -1312,51 +1312,42 @@ public class KudosudokuModule : MonoBehaviour
         else if ((m = Regex.Match(command, @"^\s*(?:(?:tap|click|press)\s+)?([A-D])\s*([1-4])\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).Success)
         {
             yield return null;
+            yield return "solve";
+            yield return "strike";
 
             var coord = (char.ToUpperInvariant(m.Groups[1].Value[0]) - 'A') + 4 * (m.Groups[2].Value[0] - '1');
             var wasShown = _shown[coord];
 
-            // Be gracious to the user and not give a strike if they activate a new square immediately after stopping a cycling
-            if (_activeSquare != null && _tpRepeatedlyClicking == null && !wasShown)
+            // If there’s already a cycling, just stop it. It’ll be up to the user’s luck if it’s currently at the right spot.
+            if (_tpRepeatedlyClicking != null)
             {
-                switch (_codings[_activeSquare.Value])
-                {
-                    case Coding.Digits:
-                    case Coding.MaritimeFlags:
-                    case Coding.SimonSamples:
-                    case Coding.Astrology:
-                    case Coding.Snooker:
-                    case Coding.CardSuits:
-                    case Coding.Mahjong:
-                    case Coding.Zoni:
-                    case Coding.ChessPieces:
-                        yield return new WaitUntil(() => _activeSquare == null);
-                        break;
-                }
+                StopCoroutine(_tpRepeatedlyClicking);
+                _tpRepeatedlyClicking = null;
             }
 
             // Tap the square
+            yield return "multiple strikes";
             yield return new[] { Squares[coord] };
 
-            // If that didn’t give a strike, and the square isn’t already prefilled, the square opened up. If it is one of the “submission timeout” squares, we need to repeatedly press it to avoid submitting;
-            // however, if we’re already doing that right now and the user just tapped the same square again, then don’t start a second copy of the subroutine
-            if (!wasShown && _tpRepeatedlyClicking == null)
+            // If a square opened up and it’s one of the “submission timeout” squares, we need to repeatedly press it to avoid submitting.
+            // However, if we’re already doing that right now and the user just tapped the same square again, then don’t start a second copy of the subroutine
+            switch (_codings[coord])
             {
-                switch (_codings[coord])
-                {
-                    case Coding.Digits:
-                    case Coding.MaritimeFlags:
-                    case Coding.SimonSamples:
-                    case Coding.Astrology:
-                    case Coding.Snooker:
-                    case Coding.CardSuits:
-                    case Coding.Mahjong:
-                    case Coding.Zoni:
-                    case Coding.ChessPieces:
+                case Coding.Digits:
+                case Coding.MaritimeFlags:
+                case Coding.SimonSamples:
+                case Coding.Astrology:
+                case Coding.Snooker:
+                case Coding.CardSuits:
+                case Coding.Mahjong:
+                case Coding.Zoni:
+                case Coding.ChessPieces:
+                    if (!wasShown)
                         _tpRepeatedlyClicking = StartCoroutine(tpRepeatedlyClick(1.25f, Squares[coord]));
-                        break;
-                }
+                    break;
             }
+
+            yield return "end multiple strikes";
         }
         else if ((m = Regex.Match(command, @"^\s*(?:show\s*)?names\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).Success)
         {
@@ -1419,6 +1410,8 @@ public class KudosudokuModule : MonoBehaviour
                             yield break;
                         }
                         yield return null;
+                        yield return "solve";
+                        yield return "strike";
                         StopCoroutine(_tpRepeatedlyClicking);
                         _tpRepeatedlyClicking = null;
                         while (!_tpCyclingName.Equals(value, StringComparison.InvariantCultureIgnoreCase))
@@ -1445,12 +1438,16 @@ public class KudosudokuModule : MonoBehaviour
             }
 
             yield return null;
+            yield return "solve";
+            yield return "strike";
             yield return new WaitUntil(() => (_curArrowRotation % 90 < 30 || _curArrowRotation % 90 > 60) && (_curArrowRotation < 45 ? 3 : _curArrowRotation < 135 ? 2 : _curArrowRotation < 225 ? 1 : _curArrowRotation < 315 ? 0 : 3) == desiredDirection);
             yield return new[] { Squares[_activeSquare.Value] };
         }
         else if (_activeSquare != null && _codings[_activeSquare.Value] == Coding.MorseCode && (m = Regex.Match(command, @"^\s*(?:(?:morse|tx|transmit|send|submit|enter|input|play)\s+)?([-.]+)\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).Success)
         {
             yield return null;
+            yield return "solve";
+            yield return "strike";
             var morse = m.Groups[1].Value;
             var sq = Squares[_activeSquare.Value];
             for (int i = 0; i < morse.Length; i++)
@@ -1464,6 +1461,8 @@ public class KudosudokuModule : MonoBehaviour
         else if (_activeSquare != null && _codings[_activeSquare.Value] == Coding.TapCode && (m = Regex.Match(command, @"^\s*(?:(?:tap|send|transmit|play|submit|enter|input)\s+)?([1-5][1-5])\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).Success)
         {
             yield return null;
+            yield return "solve";
+            yield return "strike";
             var tapCode = m.Groups[1].Value;
             var sq = Squares[_activeSquare.Value];
             yield return Enumerable.Repeat(sq, tapCode[0] - '0');
@@ -1473,6 +1472,8 @@ public class KudosudokuModule : MonoBehaviour
         else if (_activeSquare != null && _codings[_activeSquare.Value] == Coding.Semaphores && (m = Regex.Match(command, @"^\s*(?:(?:flags?|semaphores?|submit|enter|input)\s+)?(?:(?<l0>n|north|12|u|up)|(?<l_45>ne|north-?east|2|ur|up-?right)|(?<l225>se|south-?east|4|dr|down-?right)|(?<l180>s|south|6|d|down)|(?<l135>sw|south-?west|8|dl|down-?left)|(?<l90>w|west|9|l|left)|(?<l45>nw|north-?west|10|ul|up-?left))[-\.,; ]+(?:(?<r0>n|north|12|u|up)|(?<r_45>ne|north-?east|2|ur|up-?right)|(?<r_90>e|east|3|r|right)|(?<r_135>se|south-?east|4|dr|down-?right)|(?<r_180>s|south|6|d|down)|(?<r_225>sw|south-?west|8|dl|down-?left)|(?<r45>nw|north-?west|10|ul|up-?left))\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).Success)
         {
             yield return null;
+            yield return "solve";
+            yield return "strike";
             while (!m.Groups[("l" + _leftSemaphore).Replace("-", "_")].Success)
             {
                 yield return new[] { SemaphoresLeftSelectable };
@@ -1488,6 +1489,8 @@ public class KudosudokuModule : MonoBehaviour
         else if (_activeSquare != null && _codings[_activeSquare.Value] == Coding.Binary && (m = Regex.Match(command, @"^\s*(?:(?:binary|bin|digits|submit|enter|input)\s+)?([01]{5})\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).Success)
         {
             yield return null;
+            yield return "solve";
+            yield return "strike";
             for (int i = 0; i < 5; i++)
             {
                 if (_curBinary[i] != (m.Groups[1].Value[i] == '1'))
@@ -1499,6 +1502,8 @@ public class KudosudokuModule : MonoBehaviour
         else if (_activeSquare != null && _codings[_activeSquare.Value] == Coding.Letters && (m = Regex.Match(command, @"^\s*(?:(?:letters?|submit|enter|input)\s+)?([A-Z])\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).Success)
         {
             yield return null;
+            yield return "solve";
+            yield return "strike";
             while (!_curLetter.ToString().Equals(m.Groups[1].Value, StringComparison.InvariantCultureIgnoreCase))
             {
                 yield return new[] { LetterUpDownButtons[1] };
@@ -1509,6 +1514,8 @@ public class KudosudokuModule : MonoBehaviour
         else if (_activeSquare != null && _codings[_activeSquare.Value] == Coding.Braille && (m = Regex.Match(command, @"^\s*(?:(?:braille|dots|submit|enter|input)\s+)?(?=[1-6])(1?2?3?4?5?6?)\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).Success)
         {
             yield return null;
+            yield return "solve";
+            yield return "strike";
             for (int i = 0; i < 6; i++)
             {
                 if (_curBraille[i] != m.Groups[1].Value.Contains((char) ('1' + i)))
