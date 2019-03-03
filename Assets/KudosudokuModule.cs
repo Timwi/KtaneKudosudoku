@@ -1342,7 +1342,7 @@ public class KudosudokuModule : MonoBehaviour
                 case Coding.Mahjong:
                 case Coding.Zoni:
                 case Coding.ChessPieces:
-                    if (!wasShown)
+                    if (_activeSquare == coord && !wasShown)
                         _tpRepeatedlyClicking = StartCoroutine(tpRepeatedlyClick(1.25f, Squares[coord]));
                     break;
             }
