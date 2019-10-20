@@ -512,7 +512,10 @@ public class KudosudokuModule : MonoBehaviour
                     break;
 
                 case Coding.MaritimeFlags:
-                    startGraphicsCycle(sq, 1, _numberNames.Select(ch => "Flag-" + ch).Select(name => MaritimeFlagTextures.First(t => t.name == name)).ToArray(), "maritime flag", 2f, _numberNames.Select(ch => ch.ToString()).ToArray(), _numberNames.Select(ch => _tpMaritimeFlagNames[ch - 'A']).ToArray());
+                    // Special case: if one of the number names is Q, we don’t want that flag to be the first in the cycle because it looks too much like the Morse/Tap Code prompt
+                    var avoidIndex = _numberNames.Contains('Q') ? Array.IndexOf(_numberNames, 'Q') : (int?) null;
+                    startGraphicsCycle(sq, 1, _numberNames.Select(ch => "Flag-" + ch).Select(name => MaritimeFlagTextures.First(t => t.name == name)).ToArray(),
+                        "maritime flag", 2f, _numberNames.Select(ch => ch.ToString()).ToArray(), _numberNames.Select(ch => _tpMaritimeFlagNames[ch - 'A']).ToArray(), avoidIndex: avoidIndex);
                     break;
 
                 case Coding.Astrology:
@@ -1027,10 +1030,12 @@ public class KudosudokuModule : MonoBehaviour
 
     // ** CYCLES (graphics, sounds) ** //
 
-    private void startCycle(int sq, Action<int> showOption, Action cleanUp, string codingName, float submissionDelay, string[] answerNames, string[] tpAnswerNames = null, bool tpVisibleNames = false)
+    private void startCycle(int sq, Action<int> showOption, Action cleanUp, string codingName, float submissionDelay, string[] answerNames, string[] tpAnswerNames = null, bool tpVisibleNames = false, int? avoidIndex = null)
     {
         _squaresMR[sq].material = SquareExpectingAnswer;
         var cycle = Enumerable.Range(0, 4).ToArray().Shuffle();
+        while (avoidIndex != null && cycle[0] == avoidIndex.Value)
+            cycle.Shuffle();
         showOption(cycle[0]);
         var ix = 0;
 
@@ -1067,7 +1072,7 @@ public class KudosudokuModule : MonoBehaviour
         };
     }
 
-    private void startGraphicsCycle(int sq, float widthRatio, Texture[] textures, string codingName, float submissionDelay, string[] answerNames, string[] tpAnswerNames = null, Texture[] cbTextures = null)
+    private void startGraphicsCycle(int sq, float widthRatio, Texture[] textures, string codingName, float submissionDelay, string[] answerNames, string[] tpAnswerNames = null, Texture[] cbTextures = null, int? avoidIndex = null)
     {
         var gr = createGraphic(Squares[sq].transform, widthRatio);
         startCycle(sq,
@@ -1081,7 +1086,7 @@ public class KudosudokuModule : MonoBehaviour
                 gr.gameObject.SetActive(false);
                 _unusedImageObjects.Push(gr.gameObject);
             },
-            codingName, submissionDelay, answerNames, tpAnswerNames ?? answerNames);
+            codingName, submissionDelay, answerNames, tpAnswerNames ?? answerNames, avoidIndex: avoidIndex);
     }
 
     private IEnumerator submitAfterDelay(float submissionDelay)
