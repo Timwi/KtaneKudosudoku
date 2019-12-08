@@ -897,8 +897,8 @@ public class KudosudokuModule : MonoBehaviour
         {
             elapsed += Time.deltaTime;
             var e = open
-                ? easeOutQuad(Mathf.Min(elapsed, durPanel), -1, 0, durPanel)
-                : easeInQuad(Mathf.Min(elapsed, durPanel), 0, -1, durPanel);
+                ? Easing.OutQuad(Mathf.Min(elapsed, durPanel), -1, 0, durPanel)
+                : Easing.InQuad(Mathf.Min(elapsed, durPanel), 0, -1, durPanel);
             backing.localPosition = new Vector3(0, e, 0);
             panel.localPosition = new Vector3(0, e, 0);
             yield return null;
@@ -924,7 +924,7 @@ public class KudosudokuModule : MonoBehaviour
         while (elapsed < durCover)
         {
             elapsed += Time.deltaTime;
-            cover.localPosition = new Vector3(easeInOutQuad(Mathf.Min(elapsed, durCover), x1, x2, durCover), 0, easeInOutQuad(Mathf.Min(elapsed, durCover), z1, z2, durCover));
+            cover.localPosition = new Vector3(Easing.InOutQuad(Mathf.Min(elapsed, durCover), x1, x2, durCover), 0, Easing.InOutQuad(Mathf.Min(elapsed, durCover), z1, z2, durCover));
             yield return null;
         }
         _activePanelAnimations--;
@@ -1006,10 +1006,10 @@ public class KudosudokuModule : MonoBehaviour
         while (elapsed < duration)
         {
             elapsed += Time.deltaTime;
-            SemaphoresLeftHand.localEulerAngles = new Vector3(0, 0, easeInOutQuad(Mathf.Min(elapsed, duration), leftStart, leftEnd, duration));
-            SemaphoresRightHand.localEulerAngles = new Vector3(0, 0, easeInOutQuad(Mathf.Min(elapsed, duration), rightStart, rightEnd, duration));
-            SemaphoresLeftFlag.localEulerAngles = new Vector3(0, easeInOutQuad(Mathf.Min(elapsed, duration), leftFStart, leftFEnd, duration), 0);
-            SemaphoresRightFlag.localEulerAngles = new Vector3(0, easeInOutQuad(Mathf.Min(elapsed, duration), rightFStart, rightFEnd, duration), 0);
+            SemaphoresLeftHand.localEulerAngles = new Vector3(0, 0, Easing.InOutQuad(Mathf.Min(elapsed, duration), leftStart, leftEnd, duration));
+            SemaphoresRightHand.localEulerAngles = new Vector3(0, 0, Easing.InOutQuad(Mathf.Min(elapsed, duration), rightStart, rightEnd, duration));
+            SemaphoresLeftFlag.localEulerAngles = new Vector3(0, Easing.InOutQuad(Mathf.Min(elapsed, duration), leftFStart, leftFEnd, duration), 0);
+            SemaphoresRightFlag.localEulerAngles = new Vector3(0, Easing.InOutQuad(Mathf.Min(elapsed, duration), rightFStart, rightFEnd, duration), 0);
             yield return null;
         }
 
@@ -1147,28 +1147,6 @@ public class KudosudokuModule : MonoBehaviour
         obj.transform.localScale = new Vector3(.95f * widthRatio, .95f, 1);
         obj.SetActive(true);
         return obj.GetComponent<MeshRenderer>();
-    }
-
-    private static float easeInOutQuad(float t, float start, float end, float duration)
-    {
-        var change = end - start;
-        t /= duration / 2;
-        if (t < 1)
-            return change / 2 * t * t + start;
-        t--;
-        return -change / 2 * (t * (t - 2) - 1) + start;
-    }
-
-    private static float easeOutQuad(float t, float start, float end, float duration)
-    {
-        t /= duration;
-        return -(end - start) * t * (t - 2) + start;
-    }
-
-    private static float easeInQuad(float t, float start, float end, float duration)
-    {
-        t /= duration;
-        return (end - start) * t * t + start;
     }
 
     private KMSelectable.OnInteractHandler startLongPress(KMSelectable selectable)
