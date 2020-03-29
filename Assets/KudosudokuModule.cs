@@ -75,6 +75,7 @@ public class KudosudokuModule : MonoBehaviour
 
     private MeshRenderer[] _squaresMR;
     private MeshRenderer[] _brailleDotsMR;
+    private MeshRenderer currentCyclingRenderer;
     private readonly Stack<GameObject> _unusedImageObjects = new Stack<GameObject>();
 
     public enum Coding
@@ -131,6 +132,8 @@ public class KudosudokuModule : MonoBehaviour
     private bool _leftSemaphoreCw = true;
     private bool _rightSemaphoreCw = false;
     private Coroutine _semaphoreAnimation = null;
+
+    private string samplesLastPlayed;
 
     private bool[] _curBinary = new bool[5];
     private bool[] _curBraille = new bool[6];
@@ -548,7 +551,7 @@ public class KudosudokuModule : MonoBehaviour
                     break;
 
                 case Coding.SimonSamples:
-                    startCycle(sq, i => { Audio.PlaySoundAtTransform(_simonSamplesSounds[i], Squares[sq].transform); }, null, "Simon Samples sample", 2f, _simonSamplesSounds, tpVisibleNames: true);
+                    startCycle(sq, i => { Audio.PlaySoundAtTransform(_simonSamplesSounds[i], Squares[sq].transform); samplesLastPlayed = _simonSamplesSounds[i]; }, null, "Simon Samples sample", 2f, _simonSamplesSounds, tpVisibleNames: true);
                     break;
 
                 case Coding.Arrows:
@@ -1075,6 +1078,7 @@ public class KudosudokuModule : MonoBehaviour
     private void startGraphicsCycle(int sq, float widthRatio, Texture[] textures, string codingName, float submissionDelay, string[] answerNames, string[] tpAnswerNames = null, Texture[] cbTextures = null, int? avoidIndex = null)
     {
         var gr = createGraphic(Squares[sq].transform, widthRatio);
+        currentCyclingRenderer = gr;
         startCycle(sq,
             i =>
             {
@@ -1265,10 +1269,10 @@ public class KudosudokuModule : MonoBehaviour
     private string _tpCyclingName;
     private Coroutine _tpRepeatedlyClicking;
 
-#pragma warning disable 414
+    #pragma warning disable 414
     private readonly string TwitchHelpMessage = @"!{0} A1 [tap on a square] | !{0} names [show names for answers currently cycling] | !{0} S1 [stop cycling at answer with that name] | !{0} -.- [Morse code] | !{0} 13 [Tap Code or Braille] | !{0} SW.N [Semaphore (cardinals)] | !{0} 8.12 [Semaphore (clockface)] | !{0} DL U [Semaphore (directions)] | !{0} 01011 [Binary] | !{0} K [Letters] | All code submissions can be prepended by “submit” | !{0} colorblind";
     private bool TwitchPlaysActive = false;
-#pragma warning restore 414
+    #pragma warning restore 414
 
     public IEnumerator ProcessTwitchCommand(string command)
     {
@@ -1506,6 +1510,291 @@ public class KudosudokuModule : MonoBehaviour
                 yield return "trycancel";
             }
             yield return new[] { Squares[_activeSquare.Value] };
+        }
+    }
+
+    public IEnumerator TwitchHandleForcedSolve()
+    {
+        List<int> undoneSqs = new List<int>();
+        int rando = Rnd.Range(0, 2);
+        if (rando == 0)
+        {
+            for (int i = 0; i < Squares.Length; i++)
+            {
+                if (_shown[i] == false)
+                    undoneSqs.Add(i);
+            }
+        }
+        else
+        {
+            for (int i = 0; i < 4; i++)
+            {
+                for (int j = i; j <= i+12; j += 4)
+                {
+                    if (_shown[j] == false)
+                        undoneSqs.Add(j);
+                }
+            }
+        }
+        if (_activeSquare != null)
+        {
+            undoneSqs.Insert(0, _activeSquare.Value);
+        }
+        for (int i = 0; i < undoneSqs.Count; i++)
+        {
+            if (_activeSquare == null)
+            {
+                Squares[undoneSqs[i]].OnInteract();
+                yield return new WaitForSeconds(0.3f);
+            }
+            if (_codings[undoneSqs[i]] == Coding.Digits)
+            {
+                while (!DigitTextMesh.text.Equals(_solution[undoneSqs[i]] + 1 + ""))
+                {
+                    Squares[undoneSqs[i]].OnInteract();
+                    yield return new WaitForSeconds(0.3f);
+                }
+                while (_delaySubmitCoroutine != null) { yield return true; yield return new WaitForSeconds(0.1f); }
+            }
+            else if (_codings[undoneSqs[i]] == Coding.Letters)
+            {
+                while (_activePanelAnimations != 0) { yield return true; yield return new WaitForSeconds(0.1f); }
+                while (!LetterDisplay.text.Equals(_numberNames[_solution[undoneSqs[i]]].ToString()))
+                {
+                    LetterUpDownButtons[1].OnInteract();
+                    yield return new WaitForSeconds(0.1f);
+                }
+                Squares[undoneSqs[i]].OnInteract();
+                yield return new WaitForSeconds(0.1f);
+                while (_activePanelAnimations != 0) { yield return true; yield return new WaitForSeconds(0.1f); }
+            }
+            else if (_codings[undoneSqs[i]] == Coding.Arrows)
+            {
+                if (_solution[undoneSqs[i]] == 0)
+                {
+                    while (!(_curArrowRotation < 275 && _curArrowRotation > 265))
+                    {
+                        yield return true;
+                        yield return new WaitForSeconds(0.001f);
+                    }
+                }
+                else if (_solution[undoneSqs[i]] == 1)
+                {
+                    while (!(_curArrowRotation < 185 && _curArrowRotation > 175))
+                    {
+                        yield return true;
+                        yield return new WaitForSeconds(0.001f);
+                    }
+                }
+                else if (_solution[undoneSqs[i]] == 2)
+                {
+                    while (!(_curArrowRotation < 95 && _curArrowRotation > 85))
+                    {
+                        yield return true;
+                        yield return new WaitForSeconds(0.001f);
+                    }
+                }
+                else if (_solution[undoneSqs[i]] == 3)
+                {
+                    while (!(_curArrowRotation < 5 || _curArrowRotation > 355))
+                    {
+                        yield return true;
+                        yield return new WaitForSeconds(0.001f);
+                    }
+                }
+                Squares[undoneSqs[i]].OnInteract();
+                yield return new WaitForSeconds(0.3f);
+            }
+            else if (_codings[undoneSqs[i]] == Coding.Astrology)
+            {
+                while (currentCyclingRenderer.material.mainTexture != AstrologyTextures[_solution[undoneSqs[i]]])
+                {
+                    Squares[undoneSqs[i]].OnInteract();
+                    yield return new WaitForSeconds(0.3f);
+                }
+                while (_delaySubmitCoroutine != null) { yield return true; yield return new WaitForSeconds(0.1f); }
+            }
+            else if (_codings[undoneSqs[i]] == Coding.CardSuits)
+            {
+                while (currentCyclingRenderer.material.mainTexture != CardSuitTextures[_solution[undoneSqs[i]]])
+                {
+                    Squares[undoneSqs[i]].OnInteract();
+                    yield return new WaitForSeconds(0.3f);
+                }
+                while (_delaySubmitCoroutine != null) { yield return true; yield return new WaitForSeconds(0.1f); }
+            }
+            else if (_codings[undoneSqs[i]] == Coding.ChessPieces)
+            {
+                while (currentCyclingRenderer.material.mainTexture != ChessPieceTextures[_solution[undoneSqs[i]]])
+                {
+                    Squares[undoneSqs[i]].OnInteract();
+                    yield return new WaitForSeconds(0.3f);
+                }
+                while (_delaySubmitCoroutine != null) { yield return true; yield return new WaitForSeconds(0.1f); }
+            }
+            else if (_codings[undoneSqs[i]] == Coding.Snooker)
+            {
+                while (currentCyclingRenderer.material.mainTexture != SnookerBallTextures[_solution[undoneSqs[i]]])
+                {
+                    Squares[undoneSqs[i]].OnInteract();
+                    yield return new WaitForSeconds(0.3f);
+                }
+                while (_delaySubmitCoroutine != null) { yield return true; yield return new WaitForSeconds(0.1f); }
+            }
+            else if (_codings[undoneSqs[i]] == Coding.MaritimeFlags)
+            {
+                while (currentCyclingRenderer.material.mainTexture != _numberNames.Select(ch => "Flag-" + ch).Select(name => MaritimeFlagTextures.First(t => t.name == name)).ToArray()[_solution[undoneSqs[i]]])
+                {
+                    Squares[undoneSqs[i]].OnInteract();
+                    yield return new WaitForSeconds(0.3f);
+                }
+                while (_delaySubmitCoroutine != null) { yield return true; yield return new WaitForSeconds(0.1f); }
+            }
+            else if (_codings[undoneSqs[i]] == Coding.Mahjong)
+            {
+                while (currentCyclingRenderer.material.mainTexture != MahjongTextures[_solution[undoneSqs[i]]])
+                {
+                    Squares[undoneSqs[i]].OnInteract();
+                    yield return new WaitForSeconds(0.3f);
+                }
+                while (_delaySubmitCoroutine != null) { yield return true; yield return new WaitForSeconds(0.1f); }
+            }
+            else if (_codings[undoneSqs[i]] == Coding.Zoni)
+            {
+                while (!ZoniTextMesh.text.Equals(_numberNames[_solution[undoneSqs[i]]]+""))
+                {
+                    Squares[undoneSqs[i]].OnInteract();
+                    yield return new WaitForSeconds(0.3f);
+                }
+                while (_delaySubmitCoroutine != null) { yield return true; yield return new WaitForSeconds(0.1f); }
+            }
+            else if (_codings[undoneSqs[i]] == Coding.Binary)
+            {
+                while (_activePanelAnimations != 0) { yield return true; yield return new WaitForSeconds(0.1f); }
+                var name = _numberNames[_solution[undoneSqs[i]]] - 'A' + 1;
+                var binary = Enumerable.Range(0, 5).Select<int, object>(bit => (name & (1 << bit)) != 0 ? "1" : "0").ToArray();
+                string binNum = string.Format("{4}{3}{2}{1}{0}", binary);
+                for (int j = 0; j < 5; j++)
+                {
+                    if (!BinaryDigitDisplays[j].text.Equals(binNum.ElementAt(j) + ""))
+                    {
+                        BinaryDigits[j].OnInteract();
+                        yield return new WaitForSeconds(0.1f);
+                    }
+                }
+                Squares[undoneSqs[i]].OnInteract();
+                yield return new WaitForSeconds(0.1f);
+                while (_activePanelAnimations != 0) { yield return true; yield return new WaitForSeconds(0.1f); }
+            }
+            else if (_codings[undoneSqs[i]] == Coding.MorseCode)
+            {
+                var morse = _morseCode[_numberNames[_solution[undoneSqs[i]]]];
+                for (int j = 0; j < morse.Length; j++)
+                {
+                    Squares[undoneSqs[i]].OnInteract();
+                    if (morse[j].Equals('.'))
+                    {
+                        yield return new WaitForSeconds(.25f);
+                    }
+                    else
+                    {
+                        yield return new WaitForSeconds(.75f);
+                    }
+                    Squares[undoneSqs[i]].OnInteractEnded();
+                    yield return new WaitForSeconds(.25f);
+                }
+                while (_morseBlinking == null) { yield return true; yield return new WaitForSeconds(0.1f); }
+            }
+            else if (_codings[undoneSqs[i]] == Coding.TapCode)
+            {
+                var tap = _tapCodes[_numberNames[_solution[undoneSqs[i]]] - 'A'];
+                for (int k = 0; k < tap[0]; k++)
+                {
+                    Squares[undoneSqs[i]].OnInteract();
+                    yield return new WaitForSeconds(0.1f);
+                }
+                while (_tapCodeLastCodeStillActive) { yield return true; yield return new WaitForSeconds(0.1f); }
+                for (int k = 0; k < tap[1]; k++)
+                {
+                    Squares[undoneSqs[i]].OnInteract();
+                    yield return new WaitForSeconds(0.1f);
+                }
+                while (_tapCodeLastCodeStillActive) { yield return true; yield return new WaitForSeconds(0.1f); }
+            }
+            else if (_codings[undoneSqs[i]] == Coding.Braille)
+            {
+                while (_activePanelAnimations != 0) { yield return true; yield return new WaitForSeconds(0.1f); }
+                var braille = _brailleCodes[_numberNames[_solution[undoneSqs[i]]] - 'A'];
+                for (int k = 0; k < 6; k++)
+                {
+                    if (_brailleDotsMR[k].material.mainTexture == BrailleDotOn)
+                    {
+                        BrailleDots[k].OnInteract();
+                        yield return new WaitForSeconds(0.1f);
+                    }
+                }
+                for (int k = 0; k < braille.Length; k++)
+                {
+                    if (braille[k].Equals('1'))
+                    {
+                        BrailleDots[0].OnInteract();
+                    }
+                    else if (braille[k].Equals('2'))
+                    {
+                        BrailleDots[1].OnInteract();
+                    }
+                    else if (braille[k].Equals('3'))
+                    {
+                        BrailleDots[2].OnInteract();
+                    }
+                    else if (braille[k].Equals('4'))
+                    {
+                        BrailleDots[3].OnInteract();
+                    }
+                    else if (braille[k].Equals('5'))
+                    {
+                        BrailleDots[4].OnInteract();
+                    }
+                    else if (braille[k].Equals('6'))
+                    {
+                        BrailleDots[5].OnInteract();
+                    }
+                    yield return new WaitForSeconds(0.1f);
+                }
+                Squares[undoneSqs[i]].OnInteract();
+                yield return new WaitForSeconds(0.1f);
+                while (_activePanelAnimations != 0) { yield return true; yield return new WaitForSeconds(0.1f); }
+            }
+            else if (_codings[undoneSqs[i]] == Coding.Semaphores)
+            {
+                while (_activePanelAnimations != 0) { yield return true; yield return new WaitForSeconds(0.1f); }
+                while (_semaphoreLeftFlagOrientations[_numberNames[_solution[undoneSqs[i]]] - 'A'] != _leftSemaphore)
+                {
+                    SemaphoresLeftSelectable.OnInteract();
+                    yield return new WaitForSeconds(0.05f);
+                    SemaphoresLeftSelectable.OnInteractEnded();
+                    yield return new WaitForSeconds(0.05f);
+                }
+                while (_semaphoreRightFlagOrientations[_numberNames[_solution[undoneSqs[i]]] - 'A'] != _rightSemaphore)
+                {
+                    SemaphoresRightSelectable.OnInteract();
+                    yield return new WaitForSeconds(0.05f);
+                    SemaphoresRightSelectable.OnInteractEnded();
+                    yield return new WaitForSeconds(0.05f);
+                }
+                Squares[undoneSqs[i]].OnInteract();
+                yield return new WaitForSeconds(0.1f);
+                while (_activePanelAnimations != 0) { yield return true; yield return new WaitForSeconds(0.1f); }
+            }
+            else if (_codings[undoneSqs[i]] == Coding.SimonSamples)
+            {
+                while (!samplesLastPlayed.Equals(_simonSamplesSounds[_solution[undoneSqs[i]]]))
+                {
+                    Squares[undoneSqs[i]].OnInteract();
+                    yield return new WaitForSeconds(0.3f);
+                }
+                while (_delaySubmitCoroutine != null) { yield return true; yield return new WaitForSeconds(0.1f); }
+            }
         }
     }
 
