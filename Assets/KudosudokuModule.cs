@@ -75,6 +75,7 @@ public class KudosudokuModule : MonoBehaviour
 
     private MeshRenderer[] _squaresMR;
     private MeshRenderer[] _brailleDotsMR;
+    private bool _isCurrentCyclingAnswerCorrect;
     private readonly Stack<GameObject> _unusedImageObjects = new Stack<GameObject>();
 
     public enum Coding
@@ -107,6 +108,7 @@ public class KudosudokuModule : MonoBehaviour
     private KMSelectable _longPressSelectable;
     private Coroutine _longPressCoroutine;
     private Coroutine _delaySubmitCoroutine;
+    private Coroutine _waitingToSubmitMorseOrTapCode;
     private Action _delaySubmitAction;
 
     // Used both for colorblind mode (dark red/blue expecting Morse/Tap Code) and for TP (S1–S4 for sounds)
@@ -444,22 +446,17 @@ public class KudosudokuModule : MonoBehaviour
             {
                 if (_delaySubmitCoroutine != null)
                 {
+                    StopCoroutine(_delaySubmitCoroutine);
                     _delaySubmitAction();
                     _delaySubmitAction = null;
-                    StopCoroutine(_delaySubmitCoroutine);
                     _delaySubmitCoroutine = null;
                 }
-                else if (_codings[_activeSquare.Value] == Coding.MorseCode || _codings[_activeSquare.Value] == Coding.TapCode)
-                {
-                    Module.HandleStrike();
-                    Debug.LogFormat(@"[Kudosudoku #{0}] You received a strike because you pressed on unsolved square {1}{2} while square {3}{4} was still waiting for {5} input.",
-                        _moduleId, (char) ('A' + sq % 4), (char) ('1' + sq / 4), (char) ('A' + _activeSquare.Value % 4), (char) ('1' + _activeSquare.Value / 4), _codings[_activeSquare.Value]);
-                    return false;
-                }
+                else if (_codings[_activeSquare.Value] == Coding.MorseCode)
+                    interpretMorseCode(sq);
+                else if (_codings[_activeSquare.Value] == Coding.TapCode)
+                    interpretTapCode(sq);
                 else
-                {
                     Squares[_activeSquare.Value].OnInteract();
-                }
             }
 
             // User clicked on an unsolved square
@@ -475,7 +472,7 @@ public class KudosudokuModule : MonoBehaviour
                     // Henceforth, the square expects Morse code input
                     Squares[sq].OnInteract = morseMouseDown(sq);
                     Squares[sq].OnInteractEnded = morseMouseUp(sq);
-                    StartCoroutine(interpretMorseCode(sq));
+                    _waitingToSubmitMorseOrTapCode = StartCoroutine(waitToInterpretMorseCode(sq));
                     break;
 
                 case Coding.TapCode:
@@ -610,12 +607,23 @@ public class KudosudokuModule : MonoBehaviour
         };
     }
 
-    private IEnumerator interpretMorseCode(int sq)
+    private IEnumerator waitToInterpretMorseCode(int sq)
     {
         while (_morsePressTimes.Count == 0 || _morsePressTimes.Count % 2 == 1 || Time.time - _morsePressTimes.Last() < 2)
             yield return null;
 
         // User finished entering Morse Code.
+        interpretMorseCode(sq);
+    }
+
+    private void interpretMorseCode(int sq)
+    {
+        if (_waitingToSubmitMorseOrTapCode != null)
+        {
+            StopCoroutine(_waitingToSubmitMorseOrTapCode);
+            _waitingToSubmitMorseOrTapCode = null;
+        }
+
         _activeSquare = null;
         Squares[sq].OnInteract = squarePress(sq);
         Squares[sq].OnInteractEnded = null;
@@ -631,7 +639,7 @@ public class KudosudokuModule : MonoBehaviour
             goto wrongAnswer;
         }
 
-        // Calculate the average gap length
+        // Calculate the average gap length and deduce dots/dashes from that (same as Morsematics)
         var totalGapTime = 0f;
         for (int t = 1; t < _morsePressTimes.Count - 1; t += 2)
             totalGapTime += _morsePressTimes[t + 1] - _morsePressTimes[t];
@@ -653,7 +661,7 @@ public class KudosudokuModule : MonoBehaviour
         if (_morseWrong != null)
             StopCoroutine(_morseWrong);
         _morseWrong = StartCoroutine(disappearWrongMorse());
-        yield break;
+        return;
 
         correctAnswer:
         Debug.LogFormat(@"[Kudosudoku #{0}] Square {1}{2}: correct Morse code input ({3}).", _moduleId, (char) ('A' + sq % 4), (char) ('1' + sq / 4), _numberNames[_solution[sq]]);
@@ -670,7 +678,6 @@ public class KudosudokuModule : MonoBehaviour
 
     private KMSelectable.OnInteractHandler tapCodeMouseDown(int sq)
     {
-        Coroutine coroutine = null;
         return delegate
         {
             // Disappear color-blind text
@@ -684,9 +691,9 @@ public class KudosudokuModule : MonoBehaviour
                 _tapCodeLastCodeStillActive = true;
                 _tapCodeInput.Add(1);
             }
-            if (coroutine != null)
-                StopCoroutine(coroutine);
-            coroutine = StartCoroutine(acknowledgeTapCode(sq));
+            if (_waitingToSubmitMorseOrTapCode != null)
+                StopCoroutine(_waitingToSubmitMorseOrTapCode);
+            _waitingToSubmitMorseOrTapCode = StartCoroutine(acknowledgeTapCode(sq));
             return false;
         };
     }
@@ -701,6 +708,17 @@ public class KudosudokuModule : MonoBehaviour
             yield break;
 
         // User finished entering Tap Code.
+        interpretTapCode(sq);
+    }
+
+    private void interpretTapCode(int sq)
+    {
+        if (_waitingToSubmitMorseOrTapCode != null)
+        {
+            StopCoroutine(_waitingToSubmitMorseOrTapCode);
+            _waitingToSubmitMorseOrTapCode = null;
+        }
+
         _activeSquare = null;
         Squares[sq].OnInteract = squarePress(sq);
 
@@ -1036,6 +1054,7 @@ public class KudosudokuModule : MonoBehaviour
         var cycle = Enumerable.Range(0, 4).ToArray().Shuffle();
         while (avoidIndex != null && cycle[0] == avoidIndex.Value)
             cycle.Shuffle();
+        _isCurrentCyclingAnswerCorrect = _solution[sq] == cycle[0];
         showOption(cycle[0]);
         var ix = 0;
 
@@ -1066,6 +1085,7 @@ public class KudosudokuModule : MonoBehaviour
             if (TwitchPlaysActive && tpVisibleNames)
                 setTpCbText(sq, tpAnswerNames[cycle[ix]], 64);
             _tpCyclingName = tpAnswerNames[cycle[ix]];
+            _isCurrentCyclingAnswerCorrect = _solution[sq] == cycle[ix];
             showOption(cycle[ix]);
             _delaySubmitCoroutine = StartCoroutine(submitAfterDelay(submissionDelay));
             return false;
@@ -1516,6 +1536,140 @@ public class KudosudokuModule : MonoBehaviour
         {
             button.OnInteract();
             yield return new WaitForSeconds(delay);
+        }
+    }
+
+    public IEnumerator TwitchHandleForcedSolve()
+    {
+        var undoneSqs = Enumerable.Range(0, 16).Where(ix => !_shown[ix]).ToList().Shuffle();
+        if (_activeSquare != null)
+            undoneSqs.Insert(0, _activeSquare.Value);
+
+        foreach (var sq in undoneSqs)
+        {
+            while (_activePanelAnimations != 0)
+                yield return true;
+
+            if (_activeSquare == null)
+            {
+                yield return new WaitForSeconds(.4f);
+                Squares[sq].OnInteract();
+                yield return new WaitForSeconds(.3f);
+            }
+
+            while (_activePanelAnimations != 0)
+                yield return true;
+
+            switch (_codings[sq])
+            {
+                case Coding.Digits:
+                case Coding.SimonSamples:
+                case Coding.Astrology:
+                case Coding.Snooker:
+                case Coding.CardSuits:
+                case Coding.Mahjong:
+                case Coding.Zoni:
+                case Coding.ChessPieces:
+                case Coding.MaritimeFlags:
+                    while (!_isCurrentCyclingAnswerCorrect)
+                    {
+                        Squares[sq].OnInteract();
+                        yield return new WaitForSeconds(.3f);
+                    }
+                    while (_delaySubmitCoroutine != null)
+                        yield return true;
+                    break;
+
+                case Coding.Letters:
+                    while (!LetterDisplay.text.Equals(_numberNames[_solution[sq]].ToString()))
+                    {
+                        LetterUpDownButtons[1].OnInteract();
+                        yield return new WaitForSeconds(.1f);
+                    }
+                    Squares[sq].OnInteract();
+                    yield return new WaitForSeconds(.1f);
+                    break;
+
+                case Coding.Arrows:
+                    while (_solution[sq] == 3 ? (_curArrowRotation >= 30 && _curArrowRotation <= 330) : (_curArrowRotation <= 240 - 90 * _solution[sq] || _curArrowRotation >= 300 - 90 * _solution[sq]))
+                        yield return true;
+
+                    Squares[sq].OnInteract();
+                    yield return new WaitForSeconds(.1f);
+                    break;
+
+                case Coding.Binary:
+                    var name = _numberNames[_solution[sq]] - 'A' + 1;
+                    var binary = Enumerable.Range(0, 5).Select(bit => (name & (1 << (4 - bit))) != 0).ToArray();
+                    for (int j = 0; j < 5; j++)
+                    {
+                        if (_curBinary[j] != binary[j])
+                        {
+                            BinaryDigits[j].OnInteract();
+                            yield return new WaitForSeconds(.1f);
+                        }
+                    }
+                    Squares[sq].OnInteract();
+                    yield return new WaitForSeconds(.1f);
+                    break;
+
+                case Coding.MorseCode:
+                    var morse = _morseCode[_numberNames[_solution[sq]]];
+                    for (int j = 0; j < morse.Length; j++)
+                    {
+                        Squares[sq].OnInteract();
+                        yield return new WaitForSeconds(morse[j].Equals('.') ? .25f : .75f);
+                        Squares[sq].OnInteractEnded();
+                        yield return new WaitForSeconds(.25f);
+                    }
+                    while (_morseBlinking == null)
+                        yield return true;
+                    break;
+
+                case Coding.TapCode:
+                    foreach (var tap in _tapCodes[_numberNames[_solution[sq]] - 'A'])
+                    {
+                        for (int j = 0; j < tap; j++)
+                        {
+                            Squares[sq].OnInteract();
+                            yield return new WaitForSeconds(.1f);
+                        }
+                        while (_tapCodeLastCodeStillActive)
+                            yield return true;
+                    }
+                    break;
+
+                case Coding.Braille:
+                    var braille = _brailleCodes[_numberNames[_solution[sq]] - 'A'];
+                    for (int j = 0; j < 6; j++)
+                        if (_curBraille[j] != braille.Contains((char) (j + '1')))
+                        {
+                            BrailleDots[j].OnInteract();
+                            yield return new WaitForSeconds(.1f);
+                        }
+                    Squares[sq].OnInteract();
+                    yield return new WaitForSeconds(.1f);
+                    break;
+
+                case Coding.Semaphores:
+                    while (_semaphoreLeftFlagOrientations[_numberNames[_solution[sq]] - 'A'] != _leftSemaphore)
+                    {
+                        SemaphoresLeftSelectable.OnInteract();
+                        yield return new WaitForSeconds(.05f);
+                        SemaphoresLeftSelectable.OnInteractEnded();
+                        yield return new WaitForSeconds(.05f);
+                    }
+                    while (_semaphoreRightFlagOrientations[_numberNames[_solution[sq]] - 'A'] != _rightSemaphore)
+                    {
+                        SemaphoresRightSelectable.OnInteract();
+                        yield return new WaitForSeconds(.05f);
+                        SemaphoresRightSelectable.OnInteractEnded();
+                        yield return new WaitForSeconds(.05f);
+                    }
+                    Squares[sq].OnInteract();
+                    yield return new WaitForSeconds(.1f);
+                    break;
+            }
         }
     }
 }
