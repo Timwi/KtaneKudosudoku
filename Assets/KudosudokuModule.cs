@@ -256,7 +256,7 @@ public class KudosudokuModule : MonoBehaviour
             potentialGivens.Remove(Array.IndexOf(_codings, Coding.TapCode));
 
         // FOR DEBUGGING: prevent a specific coding from being pre-filled
-        //potentialGivens.Remove(Array.IndexOf(_codings, Coding.ChessPieces));
+        //potentialGivens.Remove(Array.IndexOf(_codings, Coding.MorseCode));
 
         var givens = Ut.ReduceRequiredSet(potentialGivens, state =>
                 // Special case: if both E and T are letter names, Morse Code must be a given
@@ -452,9 +452,9 @@ public class KudosudokuModule : MonoBehaviour
                     _delaySubmitCoroutine = null;
                 }
                 else if (_codings[_activeSquare.Value] == Coding.MorseCode)
-                    interpretMorseCode(sq);
+                    interpretMorseCode(_activeSquare.Value);
                 else if (_codings[_activeSquare.Value] == Coding.TapCode)
-                    interpretTapCode(sq);
+                    interpretTapCode(_activeSquare.Value);
                 else
                     Squares[_activeSquare.Value].OnInteract();
             }
@@ -655,12 +655,12 @@ public class KudosudokuModule : MonoBehaviour
 
         wrongAnswer:
         _squaresMR[sq].material = SquareUnsolved;
-        strikeAndReshuffle(sq, reasonForWrongAnswer, _numberNames[_solution[sq]].ToString());
         _morsePressTimes = null;
         reparentAndActivate(MorseWrong.transform, Squares[sq].transform);
         if (_morseWrong != null)
             StopCoroutine(_morseWrong);
         _morseWrong = StartCoroutine(disappearWrongMorse());
+        strikeAndReshuffle(sq, reasonForWrongAnswer, _numberNames[_solution[sq]].ToString());
         return;
 
         correctAnswer:
