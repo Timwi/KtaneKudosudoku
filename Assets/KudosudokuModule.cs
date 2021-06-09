@@ -134,8 +134,8 @@ public class KudosudokuModule : MonoBehaviour
     private bool _rightSemaphoreCw = false;
     private Coroutine _semaphoreAnimation = null;
 
-    private bool[] _curBinary = new bool[5];
-    private bool[] _curBraille = new bool[6];
+    private readonly bool[] _curBinary = new bool[5];
+    private readonly bool[] _curBraille = new bool[6];
     private char _curLetter = 'A';
     private float _curArrowRotation = 0;
     private char _morseCharacterToBlink;
