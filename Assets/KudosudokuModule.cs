@@ -245,7 +245,7 @@ public class KudosudokuModule : MonoBehaviour
             dist = 10;
         _numberNames[0] = Bomb.GetSerialNumberLetters().First();
         for (int i = 1; i < 4; i++)
-            _numberNames[i] = (char)((_numberNames[i - 1] - 'A' + dist) % 26 + 'A');
+            _numberNames[i] = (char) ((_numberNames[i - 1] - 'A' + dist) % 26 + 'A');
         Debug.LogFormat(@"[Kudosudoku #{0}] Number names: {1}", _moduleId, _numberNames.Select((ch, ix) => string.Format("{0}={1}", ix + 1, ch)).JoinString(", "));
 
         _codings = Enum.GetValues(typeof(Coding)).Cast<Coding>().ToArray().Shuffle();
@@ -294,7 +294,7 @@ public class KudosudokuModule : MonoBehaviour
         }
         else if (!initial)
         {
-            Debug.LogFormat(@"[Kudosudoku #{0}] Square {1}{2} correct.", _moduleId, (char)('A' + sq % 4), (char)('1' + sq / 4));
+            Debug.LogFormat(@"[Kudosudoku #{0}] Square {1}{2} correct.", _moduleId, (char) ('A' + sq % 4), (char) ('1' + sq / 4));
             Audio.PlaySoundAtTransform("Correct", Squares[sq].transform);
         }
 
@@ -303,79 +303,79 @@ public class KudosudokuModule : MonoBehaviour
         switch (_codings[sq])
         {
             case Coding.Letters:
-                {
-                    reparentAndActivate(LetterTextMesh.transform, square);
-                    LetterTextMesh.text = _numberNames[_solution[sq]].ToString();
-                    break;
-                }
+            {
+                reparentAndActivate(LetterTextMesh.transform, square);
+                LetterTextMesh.text = _numberNames[_solution[sq]].ToString();
+                break;
+            }
 
             case Coding.Digits:
-                {
-                    reparentAndActivate(DigitTextMesh.transform, square);
-                    DigitTextMesh.text = (_solution[sq] + 1).ToString();
-                    break;
-                }
+            {
+                reparentAndActivate(DigitTextMesh.transform, square);
+                DigitTextMesh.text = (_solution[sq] + 1).ToString();
+                break;
+            }
 
             case Coding.Zoni:
-                {
-                    reparentAndActivate(ZoniTextMesh.transform, square);
+            {
+                reparentAndActivate(ZoniTextMesh.transform, square);
 
-                    // Usually we’ll show the letter, but if Zoni is an initial given, it has a 1-in-10 chance of showing the digit 1–4 instead.
-                    ZoniTextMesh.text = (initial && (Rnd.Range(0, 10) == 0) ? (char)(_solution[sq] + '1') : _numberNames[_solution[sq]]).ToString();
-                    break;
-                }
+                // Usually we’ll show the letter, but if Zoni is an initial given, it has a 1-in-10 chance of showing the digit 1–4 instead.
+                ZoniTextMesh.text = (initial && (Rnd.Range(0, 10) == 0) ? (char) (_solution[sq] + '1') : _numberNames[_solution[sq]]).ToString();
+                break;
+            }
 
             case Coding.Semaphores:
-                {
-                    reparentAndActivate(SemaphoresParent.transform, square);
+            {
+                reparentAndActivate(SemaphoresParent.transform, square);
 
-                    var flag1 = SemaphoresParent.transform.Find("Flag1");
-                    var left = _semaphoreLeftFlagOrientations[_numberNames[_solution[sq]] - 'A'];
-                    flag1.localEulerAngles = new Vector3(90, 0, left);
-                    flag1.localScale = new Vector3(isLeftSemaphoreFlipped(left) ? -1 : 1, 1, 1);
+                var flag1 = SemaphoresParent.transform.Find("Flag1");
+                var left = _semaphoreLeftFlagOrientations[_numberNames[_solution[sq]] - 'A'];
+                flag1.localEulerAngles = new Vector3(90, 0, left);
+                flag1.localScale = new Vector3(isLeftSemaphoreFlipped(left) ? -1 : 1, 1, 1);
 
-                    var flag2 = SemaphoresParent.transform.Find("Flag2");
-                    var right = _semaphoreRightFlagOrientations[_numberNames[_solution[sq]] - 'A'];
-                    flag2.localEulerAngles = new Vector3(90, 0, right);
-                    flag2.localScale = new Vector3(isRightSemaphoreFlipped(right) ? 1 : -1, 1, 1);
-                    break;
-                }
+                var flag2 = SemaphoresParent.transform.Find("Flag2");
+                var right = _semaphoreRightFlagOrientations[_numberNames[_solution[sq]] - 'A'];
+                flag2.localEulerAngles = new Vector3(90, 0, right);
+                flag2.localScale = new Vector3(isRightSemaphoreFlipped(right) ? 1 : -1, 1, 1);
+                break;
+            }
 
             case Coding.Braille:
-                {
-                    reparentAndActivate(BrailleParent.transform, square);
-                    for (char bd = '1'; bd <= '6'; bd++)
-                        BrailleParent.transform.Find("Dot" + bd).gameObject.SetActive(_brailleCodes[_numberNames[_solution[sq]] - 'A'].Contains(bd));
-                    break;
-                }
+            {
+                reparentAndActivate(BrailleParent.transform, square);
+                for (char bd = '1'; bd <= '6'; bd++)
+                    BrailleParent.transform.Find("Dot" + bd).gameObject.SetActive(_brailleCodes[_numberNames[_solution[sq]] - 'A'].Contains(bd));
+                break;
+            }
 
             case Coding.Binary:
-                {
-                    reparentAndActivate(BinaryParent.transform, square);
-                    var name = _numberNames[_solution[sq]] - 'A' + 1;
-                    var binary = Enumerable.Range(0, 5).Select<int, object>(bit => (name & (1 << bit)) != 0 ? "1" : "0").ToArray();
-                    BinaryParent.transform.Find("DigitsFront").GetComponent<TextMesh>().text = string.Format("{4}{3}\n{2}{1}{0}", binary);
-                    break;
-                }
+            {
+                reparentAndActivate(BinaryParent.transform, square);
+                var name = _numberNames[_solution[sq]] - 'A' + 1;
+                var binary = Enumerable.Range(0, 5).Select<int, object>(bit => (name & (1 << bit)) != 0 ? "1" : "0").ToArray();
+                BinaryParent.transform.Find("DigitsFront").GetComponent<TextMesh>().text = string.Format("{4}{3}\n{2}{1}{0}", binary);
+                break;
+            }
 
             case Coding.Arrows:
-                {
-                    reparentAndActivate(ArrowsParent.transform, square);
-                    ArrowsParent.transform.localEulerAngles = new Vector3(0, 0, -90 * (_solution[sq] + 1));
-                    break;
-                }
+            {
+                reparentAndActivate(ArrowsParent.transform, square);
+                ArrowsParent.transform.localEulerAngles = new Vector3(0, 0, -90 * (_solution[sq] + 1));
+                break;
+            }
 
             case Coding.MorseCode:
-                {
-                    reparentAndActivate(MorseParent.transform, square);
+            {
+                reparentAndActivate(MorseParent.transform, square);
 
-                    // Usually we’ll blink the letter, but:
-                    //  • If Morse Code is an initial given, it has a 1-in-5 chance of blinking the digit 1–4 instead.
-                    //  • If Morse Code is an initial given, would have to blink E or T, and both E and T are number names, definitely blink the digit instead
-                    _morseCharacterToBlink = initial && (Rnd.Range(0, 5) == 0 || (_numberNames.Contains('E') && _numberNames.Contains('T') && "ET".Contains(_numberNames[_solution[sq]]))) ? (char)(_solution[sq] + '1') : _numberNames[_solution[sq]];
-                    _morseBlinking = StartCoroutine(blinkMorse());
-                    break;
-                }
+                // Usually we’ll blink the letter, but:
+                //  • If Morse Code is an initial given, it has a 1-in-5 chance of blinking the digit 1–4 instead.
+                //  • If Morse Code is an initial given, would have to blink E or T, and both E and T are number names, definitely blink the digit instead
+                _morseCharacterToBlink = initial && (Rnd.Range(0, 5) == 0 || (_numberNames.Contains('E') && _numberNames.Contains('T') && "ET".Contains(_numberNames[_solution[sq]]))) ? (char) (_solution[sq] + '1') : _numberNames[_solution[sq]];
+                _morseBlinking = StartCoroutine(blinkMorse());
+                break;
+            }
 
             case Coding.TapCode:
             case Coding.SimonSamples:
@@ -383,27 +383,27 @@ public class KudosudokuModule : MonoBehaviour
                 break;
 
             case Coding.MaritimeFlags:
-                {
-                    var mr = createGraphic(square, 1);
-                    var flagName = "Flag-" + (initial && Rnd.Range(0, 3) == 0 ? (_solution[sq] + 1).ToString() : _numberNames[_solution[sq]].ToString());
-                    mr.material.mainTexture = MaritimeFlagTextures.First(t => t.name == flagName);
-                    break;
-                }
+            {
+                var mr = createGraphic(square, 1);
+                var flagName = "Flag-" + (initial && Rnd.Range(0, 3) == 0 ? (_solution[sq] + 1).ToString() : _numberNames[_solution[sq]].ToString());
+                mr.material.mainTexture = MaritimeFlagTextures.First(t => t.name == flagName);
+                break;
+            }
 
             default:
-                {
-                    var textures =
-                        _codings[sq] == Coding.Snooker ? (_colorblind ? SnookerBallTexturesCB : SnookerBallTextures) :
-                        _codings[sq] == Coding.Astrology ? AstrologyTextures :
-                        _codings[sq] == Coding.Mahjong ? MahjongTextures :
-                        _codings[sq] == Coding.CardSuits ? CardSuitTextures :
-                        _codings[sq] == Coding.ChessPieces ? ChessPieceTextures : null;
-                    var mr = createGraphic(square, 1);
-                    mr.material.mainTexture = textures[_solution[sq]];
-                    if (_codings[sq] == Coding.Snooker)
-                        _snookerBallGraphic = mr;
-                    break;
-                }
+            {
+                var textures =
+                    _codings[sq] == Coding.Snooker ? (_colorblind ? SnookerBallTexturesCB : SnookerBallTextures) :
+                    _codings[sq] == Coding.Astrology ? AstrologyTextures :
+                    _codings[sq] == Coding.Mahjong ? MahjongTextures :
+                    _codings[sq] == Coding.CardSuits ? CardSuitTextures :
+                    _codings[sq] == Coding.ChessPieces ? ChessPieceTextures : null;
+                var mr = createGraphic(square, 1);
+                mr.material.mainTexture = textures[_solution[sq]];
+                if (_codings[sq] == Coding.Snooker)
+                    _snookerBallGraphic = mr;
+                break;
+            }
         }
     }
 
@@ -510,7 +510,7 @@ public class KudosudokuModule : MonoBehaviour
 
                 case Coding.MaritimeFlags:
                     // Special case: if one of the number names is Q, we don’t want that flag to be the first in the cycle because it looks too much like the Morse/Tap Code prompt
-                    var avoidIndex = _numberNames.Contains('Q') ? Array.IndexOf(_numberNames, 'Q') : (int?)null;
+                    var avoidIndex = _numberNames.Contains('Q') ? Array.IndexOf(_numberNames, 'Q') : (int?) null;
                     startGraphicsCycle(sq, 1, _numberNames.Select(ch => "Flag-" + ch).Select(name => MaritimeFlagTextures.First(t => t.name == name)).ToArray(),
                         "maritime flag", 2f, _numberNames.Select(ch => ch.ToString()).ToArray(), _numberNames.Select(ch => _tpMaritimeFlagNames[ch - 'A']).ToArray(), avoidIndex: avoidIndex);
                     break;
@@ -653,7 +653,7 @@ public class KudosudokuModule : MonoBehaviour
         reasonForWrongAnswer = character.Key == '\0' ? "an invalid Morse code" : "Morse code for " + character.Key;
         MorseWrong.text = character.Key == '\0' ? "?" : character.Key.ToString();
 
-    wrongAnswer:
+        wrongAnswer:
         _squaresMR[sq].material = SquareUnsolved;
         _morsePressTimes = null;
         reparentAndActivate(MorseWrong.transform, Squares[sq].transform);
@@ -663,8 +663,8 @@ public class KudosudokuModule : MonoBehaviour
         strikeAndReshuffle(sq, reasonForWrongAnswer, _numberNames[_solution[sq]].ToString());
         return;
 
-    correctAnswer:
-        Debug.LogFormat(@"[Kudosudoku #{0}] Square {1}{2}: correct Morse code input ({3}).", _moduleId, (char)('A' + sq % 4), (char)('1' + sq / 4), _numberNames[_solution[sq]]);
+        correctAnswer:
+        Debug.LogFormat(@"[Kudosudoku #{0}] Square {1}{2}: correct Morse code input ({3}).", _moduleId, (char) ('A' + sq % 4), (char) ('1' + sq / 4), _numberNames[_solution[sq]]);
         showSquare(sq, initial: false);
         _morsePressTimes = null;
     }
@@ -725,7 +725,7 @@ public class KudosudokuModule : MonoBehaviour
         var expected = _tapCodes[_numberNames[_solution[sq]] - 'A'];
         if (expected.SequenceEqual(_tapCodeInput))
         {
-            Debug.LogFormat(@"[Kudosudoku #{0}] Square {1}{2}: correct Tap Code input ({3}).", _moduleId, (char)('A' + sq % 4), (char)('1' + sq / 4), _tapCodeInput.JoinString(", "));
+            Debug.LogFormat(@"[Kudosudoku #{0}] Square {1}{2}: correct Tap Code input ({3}).", _moduleId, (char) ('A' + sq % 4), (char) ('1' + sq / 4), _tapCodeInput.JoinString(", "));
             showSquare(sq, initial: false);
         }
         else
@@ -872,7 +872,7 @@ public class KudosudokuModule : MonoBehaviour
             if (_isSolved || _activeSquare == null || _codings[_activeSquare.Value] != Coding.Letters)
                 return false;
 
-            _curLetter = (char)((_curLetter - 'A' + offset + 26) % 26 + 'A');
+            _curLetter = (char) ((_curLetter - 'A' + offset + 26) % 26 + 'A');
             LetterDisplay.text = _curLetter.ToString();
             return false;
         };
@@ -1136,7 +1136,7 @@ public class KudosudokuModule : MonoBehaviour
     {
         Module.HandleStrike();
 
-        Debug.LogFormat(@"[Kudosudoku #{0}] You received a strike on square {1}{2} because you entered {3} while it expected {4}.", _moduleId, (char)('A' + sq % 4), (char)('1' + sq / 4), whatEntered, expected);
+        Debug.LogFormat(@"[Kudosudoku #{0}] You received a strike on square {1}{2} because you entered {3} while it expected {4}.", _moduleId, (char) ('A' + sq % 4), (char) ('1' + sq / 4), whatEntered, expected);
 
         _squaresMR[sq].material = SquareUnsolved;
 
@@ -1421,7 +1421,6 @@ public class KudosudokuModule : MonoBehaviour
                         {
                             yield return new WaitForSeconds(.3f);
                             yield return new[] { Squares[_activeSquare.Value] };
-                            yield return "trycancel";
                         }
                     }
                     yield break;
@@ -1534,7 +1533,7 @@ public class KudosudokuModule : MonoBehaviour
             yield return "strike";
             for (int i = 0; i < 6; i++)
             {
-                if (_curBraille[i] != m.Groups[1].Value.Contains((char)('1' + i)))
+                if (_curBraille[i] != m.Groups[1].Value.Contains((char) ('1' + i)))
                     yield return new[] { BrailleDots[i] };
                 yield return "trycancel";
             }
@@ -1670,7 +1669,7 @@ public class KudosudokuModule : MonoBehaviour
                 case Coding.Braille:
                     var braille = _brailleCodes[_numberNames[_solution[sq]] - 'A'];
                     for (int j = 0; j < 6; j++)
-                        if (_curBraille[j] != braille.Contains((char)(j + '1')))
+                        if (_curBraille[j] != braille.Contains((char) (j + '1')))
                         {
                             BrailleDots[j].OnInteract();
                             yield return new WaitForSeconds(.1f);
