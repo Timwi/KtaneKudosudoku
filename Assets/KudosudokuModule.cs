@@ -568,14 +568,12 @@ public class KudosudokuModule : MonoBehaviour
 
     private void setMorseColorblindText(int sq)
     {
-        if (_colorblind)
-            setTpCbText(sq, "dark\nred", 48);
+        setTpCbText(sq, _colorblind ? "dark\nred" : "", 48);
     }
 
     private void setTapCodeColorblindText(int sq)
     {
-        if (_colorblind)
-            setTpCbText(sq, "blue", 48);
+        setTpCbText(sq, _colorblind ? "blue" : "", 48);
     }
 
     private KMSelectable.OnInteractHandler morseMouseDown(int sq)
@@ -1299,7 +1297,7 @@ public class KudosudokuModule : MonoBehaviour
 
         if (command.Trim().Equals("colorblind", StringComparison.InvariantCultureIgnoreCase))
         {
-            _colorblind = true;
+            _colorblind = !_colorblind;
 
             // Show color-blind text if a square is currently waiting for Morse Code or Tap Code
             if (_activeSquare != null && _codings[_activeSquare.Value] == Coding.MorseCode)
@@ -1309,7 +1307,7 @@ public class KudosudokuModule : MonoBehaviour
 
             // Switch the texture for any already-visible Snooker balls (“initial: true” prevents an extraneous “square was correct!” log message)
             if (_snookerBallGraphic != null)
-                _snookerBallGraphic.material.mainTexture = SnookerBallTexturesCB[_solution[Array.IndexOf(_codings, Coding.Snooker)]];
+                _snookerBallGraphic.material.mainTexture = (_colorblind ? SnookerBallTexturesCB : SnookerBallTextures)[_solution[Array.IndexOf(_codings, Coding.Snooker)]];
             yield return null;
         }
         else if ((m = Regex.Match(command, @"^\s*(?:(?:tap|click|press)\s+)?([A-D])\s*([1-4])\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).Success)
