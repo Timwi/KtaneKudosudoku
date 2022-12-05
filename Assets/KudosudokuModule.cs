@@ -1284,7 +1284,7 @@ public class KudosudokuModule : MonoBehaviour
     private Coroutine _tpRepeatedlyClicking;
 
 #pragma warning disable 414
-    private readonly string TwitchHelpMessage = @"!{0} A1 [tap on a square] | !{0} names [show names for answers currently cycling] | !{0} S1 [stop cycling at answer with that name] | !{0} -.- [Morse code] | !{0} 13 [Tap Code or Braille] | !{0} SW.N [Semaphore (cardinals)] | !{0} 8.12 [Semaphore (clockface)] | !{0} DL U [Semaphore (directions)] | !{0} 01011 [Binary] | !{0} K [Letters] | All code submissions can be prepended by “submit” | !{0} colorblind";
+    private readonly string TwitchHelpMessage = @"!{0} A1 [tap on a square] | !{0} names [show names for answers currently cycling] | !{0} S1 [stop cycling at answer with that name] | !{0} -.- [Morse code] | !{0} 13 [Tap Code or Braille; Braille is numbered in vertical columns] | !{0} SW.N [Semaphore (cardinals)] | !{0} 8.12 [Semaphore (clockface)] | !{0} DL U [Semaphore (directions)] | !{0} 01011 [Binary] | !{0} K [Letters] | All code submissions can be prepended by “submit” | !{0} colorblind";
     private bool TwitchPlaysActive = false;
 #pragma warning restore 414
 
