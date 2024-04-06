@@ -732,6 +732,7 @@ public class KudosudokuModule : MonoBehaviour
             _squaresMR[sq].material = SquareUnsolved;
         }
 
+        _tapCodeLastCodeStillActive = false;
         _tapCodeInput = null;
     }
 
@@ -1082,7 +1083,7 @@ public class KudosudokuModule : MonoBehaviour
             ix = (ix + 1) % 4;
             if (TwitchPlaysActive && tpVisibleNames)
                 setTpCbText(sq, tpAnswerNames[cycle[ix]], 64);
-            _tpCyclingName = tpAnswerNames[cycle[ix]];
+            _tpCyclingIx = ix;
             _isCurrentCyclingAnswerCorrect = _solution[sq] == cycle[ix];
             showOption(cycle[ix]);
             _delaySubmitCoroutine = StartCoroutine(submitAfterDelay(submissionDelay));
@@ -1280,7 +1281,7 @@ public class KudosudokuModule : MonoBehaviour
         /* Z */ "2 dots angled inside circle with gaps at E and W",
     };
     private string[] _tpCyclingNames;
-    private string _tpCyclingName;
+    private int _tpCyclingIx;
     private Coroutine _tpRepeatedlyClicking;
 
 #pragma warning disable 414
@@ -1383,10 +1384,7 @@ public class KudosudokuModule : MonoBehaviour
                     yield break;
             }
         }
-        else if (_activeSquare != null && _tpCyclingNames != null &&
-            (((m = Regex.Match(command, @"^\s*(?:stop at|stop on)\s+(.*?)\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).Success
-                && _tpCyclingNames.Any(tn => tn.Equals(m.Groups[1].Value, StringComparison.InvariantCultureIgnoreCase)))
-            || _tpCyclingNames.Any(tn => tn.Equals(command.Trim(), StringComparison.InvariantCultureIgnoreCase))))
+        else if (_activeSquare != null && _tpCyclingNames != null && (m = Regex.Match(command, @"^\s*(?:(?:stop at|stop on)\s+)?(.*?)\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).Success)
         {
             var value = m.Success ? m.Groups[1].Value : command.Trim();
 
@@ -1401,7 +1399,13 @@ public class KudosudokuModule : MonoBehaviour
                 case Coding.Mahjong:
                 case Coding.Zoni:
                 case Coding.ChessPieces:
-                    if (!_tpCyclingNames.Any(cn => cn.Equals(value, StringComparison.InvariantCultureIgnoreCase)))
+                    var tpIx = _tpCyclingNames.IndexOf(cn => cn.Equals(value, StringComparison.InvariantCultureIgnoreCase));
+
+                    // Allow the user to type a card suit in the singular
+                    if (tpIx == -1 && _codings[_activeSquare.Value] == Coding.CardSuits)
+                        tpIx = _tpCyclingNames.IndexOf(cn => cn.Equals(value + "s", StringComparison.InvariantCultureIgnoreCase));
+
+                    if (tpIx == -1)
                         yield return "sendtochaterror I don’t recognize that name.";
                     else
                     {
@@ -1415,7 +1419,7 @@ public class KudosudokuModule : MonoBehaviour
                         yield return "strike";
                         StopCoroutine(_tpRepeatedlyClicking);
                         _tpRepeatedlyClicking = null;
-                        while (!_tpCyclingName.Equals(value, StringComparison.InvariantCultureIgnoreCase))
+                        while (_tpCyclingIx != tpIx)
                         {
                             yield return new WaitForSeconds(.3f);
                             yield return new[] { Squares[_activeSquare.Value] };
