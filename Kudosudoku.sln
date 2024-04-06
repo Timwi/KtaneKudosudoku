@@ -1,9 +1,9 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2010
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Assembly-CSharp", "Assembly-CSharp.csproj", "{61B83FB1-9827-1414-DE40-4A45F8F4C097}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kudosudoku", "Kudosudoku.csproj", "{E761300C-B0EB-E057-A7BB-AED10767F401}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Assembly-CSharp-Editor", "Assembly-CSharp-Editor.csproj", "{C6FC04AD-7A7F-44D5-8072-B4DEFA7AB011}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kudosudoku-Editor", "Kudosudoku-Editor.csproj", "{261695DD-6E04-02CA-A17A-17F1251396C3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,19 +11,19 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{61B83FB1-9827-1414-DE40-4A45F8F4C097}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{61B83FB1-9827-1414-DE40-4A45F8F4C097}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{61B83FB1-9827-1414-DE40-4A45F8F4C097}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{61B83FB1-9827-1414-DE40-4A45F8F4C097}.Release|Any CPU.Build.0 = Release|Any CPU
-		{C6FC04AD-7A7F-44D5-8072-B4DEFA7AB011}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{C6FC04AD-7A7F-44D5-8072-B4DEFA7AB011}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{C6FC04AD-7A7F-44D5-8072-B4DEFA7AB011}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{C6FC04AD-7A7F-44D5-8072-B4DEFA7AB011}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E761300C-B0EB-E057-A7BB-AED10767F401}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E761300C-B0EB-E057-A7BB-AED10767F401}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E761300C-B0EB-E057-A7BB-AED10767F401}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E761300C-B0EB-E057-A7BB-AED10767F401}.Release|Any CPU.Build.0 = Release|Any CPU
+		{261695DD-6E04-02CA-A17A-17F1251396C3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{261695DD-6E04-02CA-A17A-17F1251396C3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{261695DD-6E04-02CA-A17A-17F1251396C3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{261695DD-6E04-02CA-A17A-17F1251396C3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(MonoDevelopProperties) = preSolution
-		StartupItem = Assembly-CSharp.csproj
+		StartupItem = Kudosudoku.csproj
 	EndGlobalSection
 EndGlobal

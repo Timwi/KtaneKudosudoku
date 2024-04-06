@@ -1,0 +1,10 @@
+{
+  "name": "Kudosudoku-Editor",
+  "references": [
+    "Kudosudoku"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": []
+}
